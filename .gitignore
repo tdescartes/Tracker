@@ -1,0 +1,75 @@
+# =========================================
+# Python / Backend
+# =========================================
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/.env
+backend/uploads/
+backend/.pytest_cache/
+backend/*.egg-info/
+backend/dist/
+backend/build/
+*.pyc
+__pycache__/
+
+# =========================================
+# Node / Web
+# =========================================
+web/node_modules/
+web/.next/
+web/out/
+web/.env.local
+web/.env
+web/coverage/
+
+# =========================================
+# Node / Mobile
+# =========================================
+mobile/node_modules/
+mobile/.expo/
+mobile/.env
+mobile/dist/
+mobile/coverage/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# =========================================
+# Database
+# =========================================
+*.sqlite
+*.sqlite3
+*.db
+
+# =========================================
+# IDE / Editor
+# =========================================
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================================
+# Logs
+# =========================================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================================
+# Secrets / Credentials
+# =========================================
+.env
+*.pem
+*.cert
+service-account-key.json
