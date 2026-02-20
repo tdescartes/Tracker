@@ -1,0 +1,73 @@
+import axios from "axios";
+import * as SecureStore from "expo-secure-store";
+
+const API_URL = process.env.API_URL || "http://localhost:8000";
+
+export const api = axios.create({ baseURL: API_URL });
+
+api.interceptors.request.use(async (config) => {
+    const token = await SecureStore.getItemAsync("hb_token");
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+});
+
+api.interceptors.response.use(
+    (r) => r,
+    async (error) => {
+        if (error.response?.status === 401) {
+            await SecureStore.deleteItemAsync("hb_token");
+        }
+        return Promise.reject(error);
+    }
+);
+
+export const authApi = {
+    register: (d: { email: string; password: string; full_name?: string; household_name?: string }) =>
+        api.post("/api/auth/register", d),
+    login: (email: string, password: string) =>
+        api.post(
+            "/api/auth/login",
+            new URLSearchParams({ username: email, password }).toString(),
+            { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+        ),
+    me: () => api.get("/api/auth/me"),
+};
+
+export const pantryApi = {
+    list: (params?: object) => api.get("/api/pantry/", { params }),
+    expiringSoon: (days = 3) => api.get(`/api/pantry/expiring-soon?days=${days}`),
+    shoppingList: () => api.get("/api/pantry/shopping-list"),
+    update: (id: string, data: object) => api.patch(`/api/pantry/${id}`, data),
+};
+
+export const receiptApi = {
+    upload: (imageUri: string) => {
+        const form = new FormData();
+        form.append("file", { uri: imageUri, type: "image/jpeg", name: "receipt.jpg" } as any);
+        return api.post("/api/receipts/upload", form, { headers: { "Content-Type": "multipart/form-data" } });
+    },
+    confirm: (id: string, data: object) => api.post(`/api/receipts/${id}/confirm`, data),
+};
+
+export const budgetApi = {
+    summary: (year: number, month: number) => api.get(`/api/budget/summary/${year}/${month}`),
+};
+
+// Phase 2 — Recipes
+export const recipesApi = {
+    suggestions: (expiringFirst = true, limit = 6) =>
+        api.get(`/api/recipes/suggestions?expiring_first=${expiringFirst}&limit=${limit}`),
+    search: (q: string) => api.get(`/api/recipes/search?q=${encodeURIComponent(q)}`),
+};
+
+// Phase 2 — Notifications (push token registration)
+export const notificationsApi = {
+    registerToken: (token: string, platform: "expo" | "web" = "expo") =>
+        api.post("/api/notifications/token", { token, platform }),
+    unregisterToken: (token: string) =>
+        api.delete("/api/notifications/token", { data: { token } }),
+    list: (unreadOnly = false) =>
+        api.get(`/api/notifications/?unread_only=${unreadOnly}`),
+    markRead: (id: string) => api.post(`/api/notifications/${id}/read`),
+    markAllRead: () => api.post("/api/notifications/read-all"),
+};
