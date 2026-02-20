@@ -1,0 +1,114 @@
+import axios from "axios";
+
+const api = axios.create({
+    baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
+});
+
+// Attach JWT token to every request
+api.interceptors.request.use((config) => {
+    if (typeof window !== "undefined") {
+        const token = localStorage.getItem("hb_token");
+        if (token) config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
+// Auto-logout on 401
+api.interceptors.response.use(
+    (res) => res,
+    (error) => {
+        if (error.response?.status === 401 && typeof window !== "undefined") {
+            localStorage.removeItem("hb_token");
+            window.location.href = "/login";
+        }
+        return Promise.reject(error);
+    }
+);
+
+export default api;
+
+// ── Typed API helpers ────────────────────────────────────────
+
+export const authApi = {
+    register: (data: { email: string; password: string; full_name?: string; household_name?: string }) =>
+        api.post("/api/auth/register", data),
+    login: (email: string, password: string) =>
+        api.post("/api/auth/login", new URLSearchParams({ username: email, password }), {
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        }),
+    me: () => api.get("/api/auth/me"),
+};
+
+export const pantryApi = {
+    list: (filters?: { location?: string; status?: string }) =>
+        api.get("/api/pantry/", { params: filters }),
+    expiringSoon: (days = 3) => api.get(`/api/pantry/expiring-soon?days=${days}`),
+    shoppingList: () => api.get("/api/pantry/shopping-list"),
+    addItem: (data: object) => api.post("/api/pantry/", data),
+    updateItem: (id: string, data: object) => api.patch(`/api/pantry/${id}`, data),
+    deleteItem: (id: string) => api.delete(`/api/pantry/${id}`),
+};
+
+export const receiptApi = {
+    upload: (file: File) => {
+        const form = new FormData();
+        form.append("file", file);
+        return api.post("/api/receipts/upload", form);
+    },
+    confirm: (id: string, data: object) => api.post(`/api/receipts/${id}/confirm`, data),
+    list: () => api.get("/api/receipts/"),
+};
+
+export const budgetApi = {
+    summary: (year: number, month: number, limit?: number) =>
+        api.get(`/api/budget/summary/${year}/${month}`, { params: { budget_limit: limit } }),
+    inflation: (itemName: string) => api.get(`/api/budget/inflation/${itemName}`),
+};
+
+export const goalsApi = {
+    list: () => api.get("/api/goals/"),
+    create: (data: object) => api.post("/api/goals/", data),
+    delete: (id: string) => api.delete(`/api/goals/${id}`),
+};
+
+export const bankApi = {
+    upload: (file: File) => {
+        const form = new FormData();
+        form.append("file", file);
+        return api.post("/api/bank/upload-statement", form);
+    },
+    transactions: () => api.get("/api/bank/transactions"),
+    reconcile: () => api.post("/api/bank/reconcile"),
+};
+
+// Phase 2 — Recipes
+export const recipesApi = {
+    suggestions: (expiringFirst = true, limit = 8) =>
+        api.get(`/api/recipes/suggestions?expiring_first=${expiringFirst}&limit=${limit}`),
+    search: (q: string) => api.get(`/api/recipes/search?q=${encodeURIComponent(q)}`),
+};
+
+// Phase 2 — Notifications
+export const notificationsApi = {
+    list: (unreadOnly = false) => api.get(`/api/notifications/?unread_only=${unreadOnly}`),
+    markRead: (id: string) => api.post(`/api/notifications/${id}/read`),
+    markAllRead: () => api.post("/api/notifications/read-all"),
+    registerToken: (token: string, platform: "expo" | "web" = "expo") =>
+        api.post("/api/notifications/token", { token, platform }),
+    unregisterToken: (token: string) =>
+        api.delete("/api/notifications/token", { data: { token } }),
+};
+
+// Phase 3 — Plaid
+export const plaidApi = {
+    createLinkToken: () => api.post("/api/plaid/link-token"),
+    exchangeToken: (publicToken: string, accountName?: string) =>
+        api.post("/api/plaid/exchange-token", { public_token: publicToken, account_name: accountName }),
+    linkedItems: () => api.get("/api/plaid/linked-items"),
+    sync: (itemId: string, daysBack = 30) =>
+        api.post("/api/plaid/sync", { item_id: itemId, days_back: daysBack }),
+    unlink: (id: string) => api.delete(`/api/plaid/items/${id}`),
+};
+
+// Re-export the base instance for ad-hoc calls
+export { api };
