@@ -1,7 +1,7 @@
 -- ============================================================
 -- Migration 002 — Phase 2 & 3 Schema
--- HomeBase: Notifications, Category Learning, Plaid Integration
--- Run: psql -U homebase_user -d homebase_db -f 002_phase2_3_schema.sql
+-- Tracker: Notifications, Category Learning, Plaid Integration
+-- Run: psql -U tracker_user -d tracker_db -f 002_phase2_3_schema.sql
 -- ============================================================
 
 -- ============================================================
@@ -99,5 +99,5 @@ CREATE INDEX IF NOT EXISTS idx_bank_tx_plaid_id
 -- ============================================================
 -- Grant permissions
 -- ============================================================
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO homebase_user;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO homebase_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO tracker_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO tracker_user;
