@@ -6,7 +6,7 @@ from sqlalchemy import select
 from app.database import get_db
 from app.models.user import User
 from app.models.goal import FinancialGoal
-from app.schemas.receipt import GoalCreate, GoalOut
+from app.schemas.receipt import GoalCreate, GoalUpdate, GoalOut
 from app.routers.auth import get_current_user
 from app.services.financial_calculator import calculate_goal
 
@@ -78,3 +78,34 @@ async def delete_goal(
     if not goal or goal.household_id != current_user.household_id:
         raise HTTPException(status_code=404, detail="Goal not found")
     await db.delete(goal)
+
+
+@router.patch("/{goal_id}", response_model=GoalOut)
+async def update_goal(
+    goal_id: uuid.UUID,
+    data: GoalUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(FinancialGoal).where(FinancialGoal.id == goal_id))
+    goal = result.scalar_one_or_none()
+    if not goal or goal.household_id != current_user.household_id:
+        raise HTTPException(status_code=404, detail="Goal not found")
+
+    for field, value in data.model_dump(exclude_none=True).items():
+        setattr(goal, field, value)
+
+    calc = calculate_goal(
+        target_price=float(goal.target_amount),
+        down_payment=float(goal.saved_amount),
+        monthly_contribution=float(goal.monthly_contribution),
+        loan_interest_rate=float(goal.interest_rate or 0),
+        loan_term_months=goal.loan_term_months or 0,
+    )
+    out = GoalOut.model_validate(goal)
+    out.months_to_goal = calc["cash_strategy"]["months_to_wait"]
+    out.estimated_completion = calc["cash_strategy"]["completion_date"]
+    out.monthly_loan_payment = calc["loan_strategy"]["monthly_payment"]
+    out.total_interest = calc["loan_strategy"]["total_interest"]
+    out.insight = calc["insight"]
+    return out
