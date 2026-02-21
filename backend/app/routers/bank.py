@@ -15,13 +15,23 @@ from app.routers.auth import get_current_user
 from app.services.bank_parser import parse_bank_file
 from app.config import settings
 
+from app.config import settings as app_settings
+
 router = APIRouter()
 
-KNOWN_SUBSCRIPTIONS = [
+DEFAULT_SUBSCRIPTIONS = [
     "NETFLIX", "SPOTIFY", "HULU", "DISNEY+", "HBO", "AMAZON PRIME",
     "APPLE.COM", "GOOGLE ONE", "MICROSOFT", "GYM", "PLANET FITNESS",
     "CRUNCH", "DROPBOX", "ADOBE", "ZOOM", "SLACK",
 ]
+
+
+def get_subscription_keywords() -> list[str]:
+    """Returns subscription keywords — user-configurable via KNOWN_SUBSCRIPTIONS env var."""
+    custom = getattr(app_settings, "KNOWN_SUBSCRIPTIONS", "")
+    if custom:
+        return [s.strip().upper() for s in custom.split(",") if s.strip()]
+    return DEFAULT_SUBSCRIPTIONS
 
 
 @router.post("/upload-statement", status_code=status.HTTP_201_CREATED)
@@ -35,44 +45,69 @@ async def upload_statement(
 
     filename = (file.filename or "").lower()
     content_type = file.content_type or ""
-    if not (filename.endswith(".pdf") or filename.endswith(".csv") or "csv" in content_type or "pdf" in content_type):
-        raise HTTPException(status_code=400, detail="Only PDF or CSV bank statements are supported")
 
-    ext = ".csv" if (filename.endswith(".csv") or "csv" in content_type) else ".pdf"
+    # Accept PDF, CSV, and image files (for scanned bank statements)
+    is_pdf = filename.endswith(".pdf") or "pdf" in content_type
+    is_csv = filename.endswith(".csv") or "csv" in content_type
+    is_image = any(filename.endswith(e) for e in [".jpg", ".jpeg", ".png", ".tiff", ".bmp"])
+
+    if not (is_pdf or is_csv or is_image):
+        raise HTTPException(
+            status_code=400,
+            detail="Supported formats: PDF, CSV, JPG, PNG bank statements"
+        )
+
+    ext = Path(filename).suffix if filename else ".pdf"
     tmp_path = os.path.join(settings.LOCAL_UPLOAD_DIR, f"stmt_{uuid.uuid4()}{ext}")
     with open(tmp_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
     try:
-        transactions = parse_bank_file(tmp_path, content_type=content_type)
+        # Try AI pipeline first (PaddleOCR + Gemini), fall back to regex
+        if settings.GEMINI_API_KEY and (is_pdf or is_image):
+            from app.services.ai_document_service import process_bank_document
+            result = await process_bank_document(tmp_path)
+            transactions = result.get("transactions", [])
+            method = result.get("_method", "unknown")
+            bank_name = result.get("bank_name", "Unknown")
+        else:
+            transactions = parse_bank_file(tmp_path, content_type=content_type)
+            method = "regex"
+            bank_name = "Unknown"
     finally:
         os.remove(tmp_path)  # Delete file after parsing (privacy)
 
     saved = []
     subscriptions = []
     for tx in transactions:
-        is_sub = any(sub in tx["description"].upper() for sub in KNOWN_SUBSCRIPTIONS)
-        is_income = tx["amount"] > 0
+        desc = tx.get("description", "")
+        amount = tx.get("amount", 0)
+        is_sub = any(sub in desc.upper() for sub in get_subscription_keywords())
+        is_income = tx.get("is_income", amount > 0)
+        category = tx.get("category", None)
 
         record = BankTransaction(
             household_id=current_user.household_id,
             transaction_date=tx["date"],
-            description=tx["description"],
-            amount=tx["amount"],
+            description=desc,
+            amount=amount,
             is_subscription=is_sub,
             is_income=is_income,
-            raw_description=tx.get("raw_line"),
+            category=category,
+            raw_description=tx.get("raw_line") or tx.get("raw_description"),
         )
         db.add(record)
         saved.append(record)
         if is_sub:
-            subscriptions.append({"description": tx["description"], "amount": tx["amount"]})
+            subscriptions.append({"description": desc, "amount": amount})
 
     await db.flush()
 
     return {
         "transactions_imported": len(saved),
         "subscriptions_found": subscriptions,
+        "parsing_method": method,
+        "bank_name": bank_name,
     }
 
 
@@ -94,9 +129,11 @@ async def list_transactions(
             "date": str(t.transaction_date),
             "description": t.description,
             "amount": float(t.amount),
+            "category": t.category,
             "is_subscription": t.is_subscription,
             "is_income": t.is_income,
             "linked_receipt_id": str(t.linked_receipt_id) if t.linked_receipt_id else None,
+            "source": "upload",
         }
         for t in txs
     ]
