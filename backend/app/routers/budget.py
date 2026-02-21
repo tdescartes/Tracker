@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, extract, func, and_
 
 from app.database import get_db
-from app.models.user import User
+from app.models.user import User, Household
 from app.models.pantry import PantryItem, PantryStatus
 from app.models.receipt import Receipt
 from app.schemas.receipt import BudgetSummaryOut
@@ -19,11 +19,17 @@ router = APIRouter()
 async def budget_summary(
     year: int,
     month: int,
-    budget_limit: Decimal = Decimal("600.00"),
+    budget_limit: Decimal | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     hid = current_user.household_id
+
+    # Use persisted household budget_limit if not overridden by query param
+    if budget_limit is None:
+        h_result = await db.execute(select(Household).where(Household.id == hid))
+        household = h_result.scalar_one_or_none()
+        budget_limit = Decimal(str(household.budget_limit)) if household else Decimal("600.00")
 
     # Total spent from receipts that month
     spent_result = await db.execute(
