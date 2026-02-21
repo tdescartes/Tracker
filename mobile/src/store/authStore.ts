@@ -15,27 +15,27 @@ export const useAuthStore = create<AuthState>((set) => ({
     user: null, token: null,
     login: async (email, password) => {
         const { data } = await authApi.login(email, password);
-        await SecureStore.setItemAsync("hb_token", data.access_token);
+        await SecureStore.setItemAsync("tracker_token", data.access_token);
         set({ user: data.user, token: data.access_token });
     },
     register: async (payload) => {
         const { data } = await authApi.register(payload);
-        await SecureStore.setItemAsync("hb_token", data.access_token);
+        await SecureStore.setItemAsync("tracker_token", data.access_token);
         set({ user: data.user, token: data.access_token });
     },
     logout: async () => {
-        await SecureStore.deleteItemAsync("hb_token");
+        await SecureStore.deleteItemAsync("tracker_token");
         set({ user: null, token: null });
     },
     hydrate: async () => {
-        const token = await SecureStore.getItemAsync("hb_token");
+        const token = await SecureStore.getItemAsync("tracker_token");
         if (!token) return false;
         try {
             const { data } = await authApi.me();
             set({ user: data, token });
             return true;
         } catch {
-            await SecureStore.deleteItemAsync("hb_token");
+            await SecureStore.deleteItemAsync("tracker_token");
             return false;
         }
     },
