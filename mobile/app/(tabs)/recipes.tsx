@@ -19,6 +19,8 @@ interface Recipe {
 export default function RecipesScreen() {
     const [expiringFirst, setExpiringFirst] = useState(true);
     const [expanded, setExpanded] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [isSearching, setIsSearching] = useState(false);
 
     const { data, isLoading, refetch } = useQuery({
         queryKey: ["recipe-suggestions-mobile", expiringFirst],
@@ -27,7 +29,16 @@ export default function RecipesScreen() {
         staleTime: 5 * 60 * 1000,
     });
 
-    const recipes: Recipe[] = data?.suggestions ?? [];
+    const { data: searchData, isLoading: searchLoading } = useQuery({
+        queryKey: ["recipe-search-mobile", searchQuery],
+        queryFn: () => recipesApi.search(searchQuery).then((r) => r.data),
+        enabled: searchQuery.length >= 2,
+        staleTime: 2 * 60 * 1000,
+    });
+
+    const recipes: Recipe[] = searchQuery.length >= 2
+        ? (searchData?.results ?? [])
+        : (data?.suggestions ?? []);
 
     const renderItem = ({ item }: { item: Recipe }) => {
         const isExp = expanded === item.name;
@@ -78,16 +89,27 @@ export default function RecipesScreen() {
 
     return (
         <View style={styles.container}>
+            {/* Search Bar */}
+            <TextInput
+                style={styles.searchInput}
+                placeholder="Search recipes (e.g. pasta, chicken…)"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                clearButtonMode="while-editing"
+            />
+
             {/* Toggle */}
-            <View style={styles.toggleRow}>
-                <Text style={styles.toggleLabel}>Prioritize expiring items</Text>
-                <Switch
-                    value={expiringFirst}
-                    onValueChange={setExpiringFirst}
-                    trackColor={{ true: "#006994" }}
-                    thumbColor="#fff"
-                />
-            </View>
+            {searchQuery.length < 2 && (
+                <View style={styles.toggleRow}>
+                    <Text style={styles.toggleLabel}>Prioritize expiring items</Text>
+                    <Switch
+                        value={expiringFirst}
+                        onValueChange={setExpiringFirst}
+                        trackColor={{ true: "#006994" }}
+                        thumbColor="#fff"
+                    />
+                </View>
+            )}
 
             {isLoading ? (
                 <ActivityIndicator color="#006994" style={{ marginTop: 40 }} />
@@ -114,6 +136,10 @@ export default function RecipesScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: "#f9fafb", padding: 16 },
+    searchInput: {
+        backgroundColor: "#fff", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+        fontSize: 14, borderWidth: 1, borderColor: "#e5e7eb", marginBottom: 12,
+    },
     toggleRow: {
         flexDirection: "row", alignItems: "center", justifyContent: "space-between",
         backgroundColor: "#fff", borderRadius: 12, padding: 14, marginBottom: 12,
