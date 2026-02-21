@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { goalsApi } from "@/lib/api";
-import { Trash2, Plus, Target } from "lucide-react";
+import { Trash2, Plus, Target, Pencil, DollarSign, X } from "lucide-react";
 
 interface GoalForm {
     goal_name: string;
@@ -38,6 +38,11 @@ export default function GoalsPage() {
     const createGoal = useMutation({
         mutationFn: (data: object) => goalsApi.create(data),
         onSuccess: () => { qc.invalidateQueries({ queryKey: ["goals"] }); setShowForm(false); setForm(defaultForm); },
+    });
+
+    const updateGoal = useMutation({
+        mutationFn: ({ id, data }: { id: string; data: object }) => goalsApi.update(id, data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ["goals"] }),
     });
 
     const deleteGoal = useMutation({
@@ -144,15 +149,52 @@ export default function GoalsPage() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    {goals.map((goal: any) => <GoalCard key={goal.id} goal={goal} onDelete={() => deleteGoal.mutate(goal.id)} />)}
+                    {goals.map((goal: any) => (
+                        <GoalCard
+                            key={goal.id}
+                            goal={goal}
+                            onUpdate={(data) => updateGoal.mutate({ id: goal.id, data })}
+                            onDelete={() => deleteGoal.mutate(goal.id)}
+                            isPending={updateGoal.isPending}
+                        />
+                    ))}
                 </div>
             )}
         </div>
     );
 }
 
-function GoalCard({ goal, onDelete }: { goal: any; onDelete: () => void }) {
+function GoalCard({ goal, onUpdate, onDelete, isPending }: {
+    goal: any; onUpdate: (data: object) => void; onDelete: () => void; isPending: boolean;
+}) {
     const pct = Math.min((parseFloat(goal.saved_amount) / parseFloat(goal.target_amount)) * 100, 100);
+    const [showLog, setShowLog] = useState(false);
+    const [logAmount, setLogAmount] = useState("");
+    const [showEdit, setShowEdit] = useState(false);
+    const [editForm, setEditForm] = useState({
+        goal_name: goal.goal_name || "",
+        target_amount: String(goal.target_amount || ""),
+        monthly_contribution: String(goal.monthly_contribution || ""),
+    });
+
+    const handleLogSavings = () => {
+        const amount = parseFloat(logAmount);
+        if (!amount || amount <= 0) return;
+        const newSaved = parseFloat(goal.saved_amount || "0") + amount;
+        onUpdate({ saved_amount: newSaved });
+        setLogAmount("");
+        setShowLog(false);
+    };
+
+    const handleEdit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onUpdate({
+            goal_name: editForm.goal_name,
+            target_amount: parseFloat(editForm.target_amount),
+            monthly_contribution: parseFloat(editForm.monthly_contribution),
+        });
+        setShowEdit(false);
+    };
 
     return (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -161,18 +203,69 @@ function GoalCard({ goal, onDelete }: { goal: any; onDelete: () => void }) {
                     <h3 className="font-semibold text-gray-900">{goal.goal_name}</h3>
                     <p className="text-sm text-neutral">Target: ${parseFloat(goal.target_amount).toLocaleString()}</p>
                 </div>
-                <button onClick={onDelete} className="text-neutral hover:text-alert transition">
-                    <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                    <button onClick={() => setShowEdit(!showEdit)} className="text-neutral hover:text-primary transition p-1" title="Edit goal">
+                        <Pencil className="w-4 h-4" />
+                    </button>
+                    <button onClick={onDelete} className="text-neutral hover:text-alert transition p-1" title="Delete goal">
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+                </div>
             </div>
+
+            {/* Edit Form */}
+            {showEdit && (
+                <form onSubmit={handleEdit} className="mb-3 p-3 bg-gray-50 rounded-lg space-y-2">
+                    <input value={editForm.goal_name} onChange={(e) => setEditForm({ ...editForm, goal_name: e.target.value })}
+                        placeholder="Goal name" className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm" />
+                    <div className="grid grid-cols-2 gap-2">
+                        <input type="number" value={editForm.target_amount} onChange={(e) => setEditForm({ ...editForm, target_amount: e.target.value })}
+                            placeholder="Target $" className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm" />
+                        <input type="number" value={editForm.monthly_contribution} onChange={(e) => setEditForm({ ...editForm, monthly_contribution: e.target.value })}
+                            placeholder="Monthly $" className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm" />
+                    </div>
+                    <div className="flex gap-2">
+                        <button type="button" onClick={() => setShowEdit(false)} className="flex-1 text-xs border border-gray-300 rounded-lg py-1.5 hover:bg-white">Cancel</button>
+                        <button type="submit" disabled={isPending} className="flex-1 text-xs bg-primary text-white rounded-lg py-1.5 hover:bg-primary-dark disabled:opacity-50">Save</button>
+                    </div>
+                </form>
+            )}
 
             {/* Progress Bar */}
             <div className="h-3 bg-gray-200 rounded-full mb-2">
-                <div className="h-full bg-secondary rounded-full" style={{ width: `${pct}%` }} />
+                <div className="h-full bg-secondary rounded-full transition-all" style={{ width: `${pct}%` }} />
             </div>
             <p className="text-xs text-neutral mb-3">
                 ${parseFloat(goal.saved_amount).toLocaleString()} saved · {pct.toFixed(0)}% complete
             </p>
+
+            {/* Log Savings */}
+            {showLog ? (
+                <div className="flex items-center gap-2 mb-3">
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={logAmount}
+                        onChange={(e) => setLogAmount(e.target.value)}
+                        placeholder="Amount saved"
+                        className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                        autoFocus
+                    />
+                    <button onClick={handleLogSavings} disabled={isPending}
+                        className="bg-secondary text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-secondary-dark disabled:opacity-50">
+                        Add
+                    </button>
+                    <button onClick={() => setShowLog(false)} className="text-neutral hover:text-gray-600">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            ) : (
+                <button onClick={() => setShowLog(true)}
+                    className="flex items-center gap-1 text-xs text-secondary font-medium hover:underline mb-3">
+                    <DollarSign className="w-3 h-3" /> Log Savings
+                </button>
+            )}
 
             {/* Results */}
             <div className="space-y-1.5 text-sm border-t border-gray-100 pt-3">
