@@ -9,17 +9,20 @@ import { api } from "@/lib/api";
 import { useHouseholdSync } from "@/hooks/useHouseholdSync";
 import {
     LayoutDashboard, Package, Wallet, Target, FileText, LogOut, Home,
-    ChefHat, Bell, CheckCheck, X,
+    ChefHat, Bell, CheckCheck, X, ShoppingCart, Receipt, Settings,
 } from "lucide-react";
 import clsx from "clsx";
 
 const NAV = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/dashboard/pantry", label: "Pantry", icon: Package },
+    { href: "/dashboard/shopping", label: "Shopping", icon: ShoppingCart },
     { href: "/dashboard/budget", label: "Budget", icon: Wallet },
     { href: "/dashboard/goals", label: "Goals", icon: Target },
     { href: "/dashboard/recipes", label: "Recipes", icon: ChefHat },
+    { href: "/dashboard/receipts", label: "Receipts", icon: Receipt },
     { href: "/dashboard/bank", label: "Bank", icon: FileText },
+    { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
 function NotificationBell() {
@@ -29,12 +32,12 @@ function NotificationBell() {
 
     const { data } = useQuery({
         queryKey: ["notifications"],
-        queryFn: () => api.get("/notifications/").then((r) => r.data),
+        queryFn: () => api.get("/api/notifications/").then((r) => r.data),
         refetchInterval: 60_000, // poll every minute
     });
 
     const markAll = useMutation({
-        mutationFn: () => api.post("/notifications/read-all"),
+        mutationFn: () => api.post("/api/notifications/read-all"),
         onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
     });
 
@@ -130,7 +133,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     useEffect(() => {
         hydrate().then(() => {
-            const token = localStorage.getItem("hb_token");
+            const token = localStorage.getItem("tracker_token");
             if (!token) router.push("/login");
         });
     }, [hydrate, router]);
