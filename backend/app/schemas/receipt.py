@@ -57,6 +57,18 @@ class GoalCreate(BaseModel):
     linked_category: str | None = None
 
 
+class GoalUpdate(BaseModel):
+    goal_name: str | None = None
+    target_amount: Decimal | None = None
+    saved_amount: Decimal | None = None
+    monthly_contribution: Decimal | None = None
+    deadline: date | None = None
+    is_loan: bool | None = None
+    interest_rate: Decimal | None = None
+    loan_term_months: int | None = None
+    linked_category: str | None = None
+
+
 class GoalOut(GoalCreate):
     id: uuid.UUID
     household_id: uuid.UUID
