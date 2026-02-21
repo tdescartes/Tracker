@@ -13,7 +13,7 @@ def calculate_goal(
     monthly_contribution: float,
     loan_interest_rate: float = 0.0,
     loan_term_months: int = 60,
-    insight_cut_amount: float = 50.0,   # Default "what if you cut $50/month"
+    insight_cut_amount: float | None = None,
 ) -> dict:
     """
     Returns:
@@ -21,6 +21,10 @@ def calculate_goal(
       loan_strategy:   monthly_payment, total_interest
       insight:         plain-English suggestion
     """
+    # Dynamic: suggest cutting ~15% of monthly contribution (min $25, max $200)
+    if insight_cut_amount is None:
+        insight_cut_amount = max(25.0, min(200.0, round(monthly_contribution * 0.15, 0))) if monthly_contribution > 0 else 50.0
+
     principal = max(target_price - down_payment, 0.0)
 
     # ── Cash Strategy ─────────────────────────────────────────
