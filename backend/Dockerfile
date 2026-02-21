@@ -36,8 +36,8 @@ COPY . .
 RUN mkdir -p /app/uploads
 
 # Non-root user for security
-RUN useradd -m -u 1000 homebase && chown -R homebase:homebase /app
-USER homebase
+RUN useradd -m -u 1000 tracker && chown -R tracker:tracker /app
+USER tracker
 
 EXPOSE 8000
 
