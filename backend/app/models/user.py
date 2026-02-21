@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, ForeignKey, DateTime, func
+from decimal import Decimal
+from sqlalchemy import String, ForeignKey, DateTime, Numeric, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -11,6 +12,8 @@ class Household(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     currency_code: Mapped[str] = mapped_column(String(3), default="USD")
+    budget_limit: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=600.00)
+    invite_code: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     users: Mapped[list["User"]] = relationship("User", back_populates="household")
