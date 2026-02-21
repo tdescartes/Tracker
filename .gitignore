@@ -73,3 +73,13 @@ pnpm-debug.log*
 *.pem
 *.cert
 service-account-key.json
+
+# =========================================
+# Expo / Mobile export artifacts
+# =========================================
+mobile/.expo-export-test/
+mobile/.expo-export-test/**
+mobile/*.tgz
+mobile/expo-*.tgz
+mobile/react-native-*.tgz
+mobile/.expo/
