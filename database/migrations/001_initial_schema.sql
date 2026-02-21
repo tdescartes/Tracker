@@ -1,6 +1,6 @@
--- homebase/database/migrations/001_initial_schema.sql
+-- tracker/database/migrations/001_initial_schema.sql
 -- Run this against a fresh PostgreSQL database:
---   psql -U postgres -d homebase_db -f 001_initial_schema.sql
+--   psql -U postgres -d tracker_db -f 001_initial_schema.sql
 
 -- ─── Extensions ────────────────────────────────────────────────────────────
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
