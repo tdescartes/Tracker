@@ -1,11 +1,15 @@
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
-import { Redirect, Stack } from "expo-router";
+import { Slot } from "expo-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
+import { enableScreens } from "react-native-screens";
 import { useAuthStore } from "../src/store/authStore";
 import { notificationsApi } from "../src/lib/api";
+import { useHouseholdSync } from "../src/hooks/useHouseholdSync";
+
+enableScreens(false);
 
 const queryClient = new QueryClient();
 
@@ -33,8 +37,8 @@ async function registerForPushNotifications(): Promise<string | null> {
 
     // Android: create notification channel
     if (Platform.OS === "android") {
-        await Notifications.setNotificationChannelAsync("homebase", {
-            name: "HomeBase Alerts",
+        await Notifications.setNotificationChannelAsync("tracker", {
+            name: "Tracker Alerts",
             importance: Notifications.AndroidImportance.HIGH,
             vibrationPattern: [0, 250, 250, 250],
             lightColor: "#006994",
@@ -60,6 +64,9 @@ function RootNavigator() {
     const notificationListener = useRef<any>(null);
     const responseListener = useRef<any>(null);
 
+    // Real-time household sync via WebSocket
+    useHouseholdSync((user as any)?.household_id ?? null);
+
     useEffect(() => {
         hydrate();
     }, []);
@@ -78,7 +85,7 @@ function RootNavigator() {
 
         // Listen for notifications received while app is open
         notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
-            console.log("[HomeBase] Notification received:", notification.request.content.title);
+            console.log("[Tracker] Notification received:", notification.request.content.title);
         });
 
         // Listen for notification taps
@@ -96,11 +103,6 @@ function RootNavigator() {
         };
     }, [user]);
 
-    return (
-        <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(tabs)" />
-        </Stack>
-    );
+    return <Slot />;
 }
 
