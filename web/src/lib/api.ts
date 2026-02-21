@@ -7,7 +7,7 @@ const api = axios.create({
 // Attach JWT token to every request
 api.interceptors.request.use((config) => {
     if (typeof window !== "undefined") {
-        const token = localStorage.getItem("hb_token");
+        const token = localStorage.getItem("tracker_token");
         if (token) config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -18,7 +18,7 @@ api.interceptors.response.use(
     (res) => res,
     (error) => {
         if (error.response?.status === 401 && typeof window !== "undefined") {
-            localStorage.removeItem("hb_token");
+            localStorage.removeItem("tracker_token");
             window.location.href = "/login";
         }
         return Promise.reject(error);
@@ -65,12 +65,6 @@ export const budgetApi = {
     inflation: (itemName: string) => api.get(`/api/budget/inflation/${itemName}`),
 };
 
-export const goalsApi = {
-    list: () => api.get("/api/goals/"),
-    create: (data: object) => api.post("/api/goals/", data),
-    delete: (id: string) => api.delete(`/api/goals/${id}`),
-};
-
 export const bankApi = {
     upload: (file: File) => {
         const form = new FormData();
@@ -108,6 +102,31 @@ export const plaidApi = {
     sync: (itemId: string, daysBack = 30) =>
         api.post("/api/plaid/sync", { item_id: itemId, days_back: daysBack }),
     unlink: (id: string) => api.delete(`/api/plaid/items/${id}`),
+};
+
+// Settings — profile, household, export
+export const settingsApi = {
+    getProfile: () => api.get("/api/settings/profile"),
+    updateProfile: (data: { full_name?: string; email?: string }) =>
+        api.patch("/api/settings/profile", data),
+    changePassword: (data: { current_password: string; new_password: string }) =>
+        api.post("/api/settings/change-password", data),
+    updateHousehold: (data: { name?: string; currency_code?: string; budget_limit?: number }) =>
+        api.patch("/api/settings/household", data),
+    generateInvite: () => api.post("/api/settings/household/generate-invite"),
+    joinHousehold: (inviteCode: string) =>
+        api.post("/api/settings/household/join", { invite_code: inviteCode }),
+    listMembers: () => api.get("/api/settings/household/members"),
+    exportPantry: () => api.get("/api/settings/export/pantry", { responseType: "blob" }),
+    exportTransactions: () => api.get("/api/settings/export/transactions", { responseType: "blob" }),
+};
+
+// Goals — updated with PATCH
+export const goalsApi = {
+    list: () => api.get("/api/goals/"),
+    create: (data: object) => api.post("/api/goals/", data),
+    update: (id: string, data: object) => api.patch(`/api/goals/${id}`, data),
+    delete: (id: string) => api.delete(`/api/goals/${id}`),
 };
 
 // Re-export the base instance for ad-hoc calls
