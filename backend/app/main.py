@@ -7,6 +7,7 @@ import os
 from app.config import settings
 from app.database import engine, Base
 from app.routers import auth, receipts, pantry, budget, goals, bank, recipes, notifications, plaid
+from app.routers import settings as settings_router
 from app.routers import ws as ws_router
 
 
@@ -51,7 +52,7 @@ app = FastAPI(
 # CORS — allow the web and mobile frontends
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_ORIGIN, "http://localhost:8081"],  # 8081 = Expo
+    allow_origins=[settings.FRONTEND_ORIGIN, settings.MOBILE_ORIGIN],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -72,6 +73,7 @@ app.include_router(bank.router,          prefix="/api/bank",          tags=["Ban
 app.include_router(recipes.router,       prefix="/api/recipes",       tags=["Recipes"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
 app.include_router(plaid.router,         prefix="/api/plaid",         tags=["Plaid"])
+app.include_router(settings_router.router, prefix="/api/settings",     tags=["Settings"])
 app.include_router(ws_router.router,     prefix="/api/ws",            tags=["WebSocket"])
 
 
