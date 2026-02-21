@@ -30,12 +30,11 @@ async def get_recipe_suggestions(
     """
     # Fetch active pantry items
     query = text("""
-        SELECT pi.name, pi.expiry_date, pi.status
+        SELECT pi.name, pi.expiration_date, pi.status
         FROM pantry_items pi
-        JOIN users u ON u.id = pi.added_by_user_id
-        WHERE u.household_id = :hid
+        WHERE pi.household_id = :hid
           AND pi.status IN ('UNOPENED', 'OPENED')
-        ORDER BY pi.expiry_date ASC NULLS LAST
+        ORDER BY pi.expiration_date ASC NULLS LAST
     """)
     result = await db.execute(query, {"hid": current_user.household_id})
     rows = result.fetchall()
@@ -50,7 +49,7 @@ async def get_recipe_suggestions(
     for r in rows:
         item_names.append(r.name)
         # Double-weight items expiring within 4 days
-        if expiring_first and r.expiry_date and r.expiry_date <= today + timedelta(days=4):
+        if expiring_first and r.expiration_date and r.expiration_date <= today + timedelta(days=4):
             item_names.append(r.name)
 
     # Use Spoonacular if configured, else fallback to builtin
