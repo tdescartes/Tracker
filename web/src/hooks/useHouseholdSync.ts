@@ -22,7 +22,7 @@ export function useHouseholdSync(householdId: string | null | undefined) {
 
     const connect = useCallback(() => {
         if (!householdId) return;
-        const token = localStorage.getItem("hb_token");
+        const token = localStorage.getItem("tracker_token");
         if (!token) return;
 
         const url = `${WS_BASE}/${householdId}?token=${encodeURIComponent(token)}`;
