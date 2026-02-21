@@ -1,43 +1,41 @@
 # Web framework
-fastapi==0.111.0
-uvicorn[standard]==0.29.0
-websockets==12.0
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+websockets==15.0.1
 
 # Database
-sqlalchemy==2.0.30
-asyncpg==0.29.0
-alembic==1.13.1
-psycopg2-binary==2.9.9
+sqlalchemy==2.0.41
+asyncpg==0.30.0
+alembic==1.15.2
+psycopg2-binary==2.9.10
 
 # Auth / Security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-python-multipart==0.0.9
+python-multipart==0.0.20
 
 # Validation
-pydantic==2.7.1
-pydantic-settings==2.2.1
-email-validator==2.1.1
+pydantic==2.11.4
+pydantic-settings==2.9.1
+email-validator==2.2.0
 
 # OCR & File Handling
-pytesseract==0.3.10
-Pillow==10.3.0
-pdfplumber==0.11.0
-python-magic==0.4.27
+Pillow==11.2.1
+pdfplumber==0.11.6
+paddleocr==2.9.1
+paddlepaddle==3.0.0
 
-# HTTP Client (Veryfi, Google Vision, Spoonacular, Plaid, Expo Push)
-httpx==0.27.0
+# AI / LLM Structuring
+google-generativeai==0.8.5
+
+# HTTP Client (Spoonacular, Plaid, Expo Push)
+httpx==0.28.1
 
 # Date helpers
-python-dateutil==2.9.0
+python-dateutil==2.9.0.post0
 
 # Utilities
-python-dotenv==1.0.1
-boto3==1.34.95
-uuid==1.30
-
-# CORS
-starlette==0.37.2
+python-dotenv==1.1.0
 
 # Phase 2 — background scheduling (optional; for cron-style expiry notifications)
-apscheduler==3.10.4
+apscheduler==3.11.0
