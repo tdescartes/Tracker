@@ -6,7 +6,7 @@ const API_URL = process.env.API_URL || "http://localhost:8000";
 export const api = axios.create({ baseURL: API_URL });
 
 api.interceptors.request.use(async (config) => {
-    const token = await SecureStore.getItemAsync("hb_token");
+    const token = await SecureStore.getItemAsync("tracker_token");
     if (token) config.headers.Authorization = `Bearer ${token}`;
     return config;
 });
@@ -15,7 +15,7 @@ api.interceptors.response.use(
     (r) => r,
     async (error) => {
         if (error.response?.status === 401) {
-            await SecureStore.deleteItemAsync("hb_token");
+            await SecureStore.deleteItemAsync("tracker_token");
         }
         return Promise.reject(error);
     }
@@ -70,4 +70,37 @@ export const notificationsApi = {
         api.get(`/api/notifications/?unread_only=${unreadOnly}`),
     markRead: (id: string) => api.post(`/api/notifications/${id}/read`),
     markAllRead: () => api.post("/api/notifications/read-all"),
+};
+
+// Goals
+export const goalsApi = {
+    list: () => api.get("/api/goals/"),
+    create: (data: object) => api.post("/api/goals/", data),
+    update: (id: string, data: object) => api.patch(`/api/goals/${id}`, data),
+    delete: (id: string) => api.delete(`/api/goals/${id}`),
+};
+
+// Bank
+export const bankApi = {
+    transactions: (params?: { category?: string; type?: string }) =>
+        api.get("/api/bank/transactions", { params }),
+    upload: (fileUri: string, mimeType = "application/pdf", fileName = "statement.pdf") => {
+        const form = new FormData();
+        form.append("file", { uri: fileUri, type: mimeType, name: fileName } as any);
+        return api.post("/api/bank/upload-statement", form, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
+    },
+    reconcile: () => api.post("/api/bank/reconcile"),
+};
+
+// Plaid (mobile)
+export const plaidApi = {
+    linkToken: () => api.post("/api/plaid/link-token"),
+    exchangeToken: (publicToken: string) =>
+        api.post("/api/plaid/exchange-token", { public_token: publicToken }),
+    linkedItems: () => api.get("/api/plaid/linked-items"),
+    sync: (itemId: string, daysBack = 30) =>
+        api.post("/api/plaid/sync", { item_id: itemId, days_back: daysBack }),
+    unlink: (id: string) => api.delete(`/api/plaid/items/${id}`),
 };
