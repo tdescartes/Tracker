@@ -27,7 +27,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ isLoading: true });
         try {
             const { data } = await authApi.login(email, password);
-            localStorage.setItem("hb_token", data.access_token);
+            localStorage.setItem("tracker_token", data.access_token);
             set({ user: data.user, token: data.access_token });
         } finally {
             set({ isLoading: false });
@@ -38,7 +38,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ isLoading: true });
         try {
             const { data } = await authApi.register(payload);
-            localStorage.setItem("hb_token", data.access_token);
+            localStorage.setItem("tracker_token", data.access_token);
             set({ user: data.user, token: data.access_token });
         } finally {
             set({ isLoading: false });
@@ -46,18 +46,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     },
 
     logout: () => {
-        localStorage.removeItem("hb_token");
+        localStorage.removeItem("tracker_token");
         set({ user: null, token: null });
     },
 
     hydrate: async () => {
-        const token = localStorage.getItem("hb_token");
+        const token = localStorage.getItem("tracker_token");
         if (!token) return;
         try {
             const { data } = await authApi.me();
             set({ user: data, token });
         } catch {
-            localStorage.removeItem("hb_token");
+            localStorage.removeItem("tracker_token");
         }
     },
 }));
