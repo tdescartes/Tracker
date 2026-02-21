@@ -15,8 +15,12 @@ export default function TabsLayout() {
             <Tabs.Screen name="index" options={{ title: "Home", tabBarLabel: "Home" }} />
             <Tabs.Screen name="pantry" options={{ title: "Pantry", tabBarLabel: "Pantry" }} />
             <Tabs.Screen name="scan" options={{ title: "Scan Receipt", tabBarLabel: "Scan" }} />
+            <Tabs.Screen name="bank" options={{ title: "Bank", tabBarLabel: "Bank" }} />
             <Tabs.Screen name="recipes" options={{ title: "Recipe Ideas", tabBarLabel: "Recipes" }} />
             <Tabs.Screen name="shopping" options={{ title: "Shopping List", tabBarLabel: "Shopping" }} />
+            <Tabs.Screen name="budget" options={{ title: "Budget", tabBarLabel: "Budget" }} />
+            <Tabs.Screen name="goals" options={{ title: "Goals", tabBarLabel: "Goals" }} />
+            <Tabs.Screen name="notifications" options={{ title: "Notifications", tabBarLabel: "Alerts" }} />
         </Tabs>
     );
 }
