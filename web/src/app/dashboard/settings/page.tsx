@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { settingsApi } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -33,13 +33,13 @@ function ProfileSection() {
     });
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
-    const [initialized, setInitialized] = useState(false);
 
-    if (profile && !initialized) {
-        setName(profile.full_name || "");
-        setEmail(profile.email || "");
-        setInitialized(true);
-    }
+    useEffect(() => {
+        if (profile) {
+            setName(profile.full_name || "");
+            setEmail(profile.email || "");
+        }
+    }, [profile]);
 
     const update = useMutation({
         mutationFn: () => settingsApi.updateProfile({ full_name: name, email }),
@@ -158,13 +158,13 @@ function HouseholdSection() {
 
     const [name, setName] = useState("");
     const [budget, setBudget] = useState("");
-    const [initialized, setInitialized] = useState(false);
 
-    if (profile && !initialized) {
-        setName(profile.household_name || "");
-        setBudget(String(profile.budget_limit ?? "600"));
-        setInitialized(true);
-    }
+    useEffect(() => {
+        if (profile) {
+            setName(profile.household_name || "");
+            setBudget(String(profile.budget_limit ?? "600"));
+        }
+    }, [profile]);
 
     const update = useMutation({
         mutationFn: () =>
@@ -305,6 +305,9 @@ function MembersSection() {
 
 /* ── Data Export ───────────────────────────────────────────── */
 function ExportSection() {
+    const [exportingPantry, setExportingPantry] = useState(false);
+    const [exportingTx, setExportingTx] = useState(false);
+
     const downloadBlob = (data: Blob, filename: string) => {
         const url = URL.createObjectURL(data);
         const a = document.createElement("a");
@@ -315,13 +318,23 @@ function ExportSection() {
     };
 
     const exportPantry = async () => {
-        const { data } = await settingsApi.exportPantry();
-        downloadBlob(data, "pantry_export.csv");
+        setExportingPantry(true);
+        try {
+            const { data } = await settingsApi.exportPantry();
+            downloadBlob(data, "pantry_export.csv");
+        } finally {
+            setExportingPantry(false);
+        }
     };
 
     const exportTransactions = async () => {
-        const { data } = await settingsApi.exportTransactions();
-        downloadBlob(data, "transactions_export.csv");
+        setExportingTx(true);
+        try {
+            const { data } = await settingsApi.exportTransactions();
+            downloadBlob(data, "transactions_export.csv");
+        } finally {
+            setExportingTx(false);
+        }
     };
 
     return (
@@ -332,13 +345,13 @@ function ExportSection() {
             </div>
             <p className="text-sm text-gray-700 mb-3">Download your data as CSV files.</p>
             <div className="flex gap-3">
-                <button onClick={exportPantry}
-                    className="flex items-center gap-2 border border-primary text-primary px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/5">
-                    <Download className="w-3.5 h-3.5" /> Pantry Data
+                <button onClick={exportPantry} disabled={exportingPantry}
+                    className="flex items-center gap-2 border border-primary text-primary px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/5 disabled:opacity-50">
+                    <Download className="w-3.5 h-3.5" /> {exportingPantry ? "Exporting…" : "Pantry Data"}
                 </button>
-                <button onClick={exportTransactions}
-                    className="flex items-center gap-2 border border-primary text-primary px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/5">
-                    <Download className="w-3.5 h-3.5" /> Transactions
+                <button onClick={exportTransactions} disabled={exportingTx}
+                    className="flex items-center gap-2 border border-primary text-primary px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/5 disabled:opacity-50">
+                    <Download className="w-3.5 h-3.5" /> {exportingTx ? "Exporting…" : "Transactions"}
                 </button>
             </div>
         </section>
