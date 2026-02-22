@@ -1,6 +1,7 @@
 import uuid
 import shutil
 import os
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
@@ -16,6 +17,7 @@ from app.routers.auth import get_current_user
 from app.services.categorization_service import bulk_record_overrides, get_learned_mappings
 from app.config import settings
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -41,7 +43,7 @@ async def upload_receipt(
         # TODO: upload to S3-compatible storage (MinIO) — coming soon
         raise HTTPException(status_code=501, detail="Remote storage (MinIO) not configured yet. Set USE_LOCAL_STORAGE=true.")
 
-    # 2. Create receipt record with PROCESSING status
+    # 2. Create receipt record, commit immediately so it persists regardless of OCR outcome
     receipt = Receipt(
         household_id=current_user.household_id,
         uploader_id=current_user.id,
@@ -49,17 +51,40 @@ async def upload_receipt(
         processing_status="PROCESSING",
     )
     db.add(receipt)
-    await db.flush()
+    await db.commit()
+    await db.refresh(receipt)   # pull back server-generated fields (scanned_at, etc.)
+
+    # Get learned category mappings — uses the same session but on a fresh transaction
+    learned: dict = {}
+    try:
+        learned = await get_learned_mappings(db, str(current_user.household_id))
+    except Exception as learn_exc:
+        logger.warning("Could not load learned mappings: %s", learn_exc)
+        await db.rollback()  # safe — receipt above is already committed
 
     # 3. Run AI document pipeline (PaddleOCR + Gemini) with regex fallback
     try:
         from app.services.ai_document_service import process_receipt_document
+
+        logger.info(
+            "Starting receipt processing for %s (user=%s, file=%s)",
+            receipt.id, current_user.id, filename,
+        )
+
         parsed = await process_receipt_document(
-            save_path if settings.USE_LOCAL_STORAGE else image_url
+            save_path if settings.USE_LOCAL_STORAGE else image_url,
+            learned_mappings=learned,
         )
 
         raw_text = parsed.get("_raw_text", "")
         method = parsed.get("_method", "unknown")
+
+        logger.info(
+            "Receipt %s processed via %s — merchant=%s, items=%d",
+            receipt.id, method,
+            parsed.get("merchant", "?"),
+            len(parsed.get("items", [])),
+        )
 
         receipt.raw_ocr_text = raw_text
         receipt.merchant_name = parsed.get("merchant", "Unknown Store")
@@ -89,11 +114,20 @@ async def upload_receipt(
             ))
 
     except Exception as exc:
-        receipt.processing_status = "FAILED"
-        await db.flush()
-        raise HTTPException(status_code=500, detail=f"Document processing failed: {exc}")
+        logger.error("Receipt processing failed for %s: %s", receipt.id, exc, exc_info=True)
+        # Rollback any stale state, then write FAILED status in a fresh transaction
+        try:
+            await db.rollback()
+            receipt.processing_status = "FAILED"
+            await db.commit()
+        except Exception:
+            pass  # best-effort — don't let status update failure mask the real error
+        raise HTTPException(
+            status_code=500,
+            detail=f"Document processing failed: {type(exc).__name__}: {exc}",
+        )
 
-    await db.flush()
+    await db.commit()
 
     # 4. Return the receipt + parsed items for user review (items NOT saved yet)
     out = ReceiptOut.model_validate(receipt)
@@ -124,6 +158,16 @@ async def confirm_receipt(
 
     # Create pantry items from confirmed list
     for item_data in payload.items:
+        # Auto-populate expiration date based on category shelf life
+        exp_date = None
+        if item_data.category:
+            from app.services.receipt_parser import DEFAULT_SHELF_LIFE
+            from datetime import date as date_type, timedelta
+            shelf_days = DEFAULT_SHELF_LIFE.get(item_data.category)
+            if shelf_days:
+                base = receipt.purchase_date or date_type.today()
+                exp_date = base + timedelta(days=shelf_days)
+
         pantry_item = PantryItem(
             household_id=current_user.household_id,
             receipt_id=receipt.id,
@@ -133,6 +177,7 @@ async def confirm_receipt(
             unit=item_data.unit,
             purchase_price=item_data.price,
             purchase_date=receipt.purchase_date,
+            expiration_date=exp_date,
         )
         db.add(pantry_item)
 
@@ -164,10 +209,29 @@ async def list_receipts(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from sqlalchemy.orm import selectinload
+    from decimal import Decimal
+
     result = await db.execute(
         select(Receipt)
+        .options(selectinload(Receipt.pantry_items))
         .where(Receipt.household_id == current_user.household_id)
         .order_by(Receipt.scanned_at.desc())
         .limit(50)
     )
-    return [ReceiptOut.model_validate(r) for r in result.scalars()]
+    receipts = result.scalars().all()
+    out = []
+    for r in receipts:
+        receipt_out = ReceiptOut.model_validate(r)
+        receipt_out.items = [
+            ParsedReceiptItem(
+                name=pi.name,
+                price=pi.purchase_price or Decimal("0"),
+                category=pi.category,
+                quantity=pi.quantity or Decimal("1"),
+                unit=pi.unit,
+            )
+            for pi in r.pantry_items
+        ]
+        out.append(receipt_out)
+    return out
