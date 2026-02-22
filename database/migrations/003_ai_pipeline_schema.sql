@@ -23,6 +23,14 @@ ALTER TABLE bank_transactions
 
 COMMENT ON COLUMN bank_transactions.source IS 'How transaction was imported: upload (PDF/CSV), plaid (API), manual (user entry)';
 
+-- Plaid transaction ID for dedup (partial unique index)
+ALTER TABLE bank_transactions
+    ADD COLUMN IF NOT EXISTS plaid_transaction_id TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bank_plaid_txn_id
+    ON bank_transactions(plaid_transaction_id)
+    WHERE plaid_transaction_id IS NOT NULL;
+
 -- ============================================================
 -- Document processing log — audit trail for AI pipeline runs
 -- ============================================================
