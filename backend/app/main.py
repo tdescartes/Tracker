@@ -1,6 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import os
 
@@ -50,13 +51,45 @@ app = FastAPI(
 )
 
 # CORS — allow the web and mobile frontends
+# In development, also allow any localhost port (e.g. Next.js dev server on :3000,
+# Expo on :8081, Storybook on :6006, etc.).  In production, lock this to your
+# actual domain(s) via FRONTEND_ORIGIN env var.
+_allowed_origins = [settings.FRONTEND_ORIGIN, settings.MOBILE_ORIGIN]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_ORIGIN, settings.MOBILE_ORIGIN],
+    allow_origins=_allowed_origins,
+    # Allow any localhost origin in dev so that a 500 doesn't appear as CORS
+    allow_origin_regex=r"http://localhost(:\d+)?$" if settings.DEBUG else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Global exception handler ─────────────────────────────────────────────────
+# Starlette's ExceptionMiddleware catches unhandled 500s BEFORE CORSMiddleware
+# can add headers, so the browser sees a CORS error instead of the real 500.
+# This handler re-attaches CORS headers to every error response.
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    import traceback, logging
+    logging.getLogger(__name__).error(
+        "Unhandled exception on %s %s: %s",
+        request.method, request.url.path,
+        exc, exc_info=True,
+    )
+    origin = request.headers.get("origin", "")
+    headers = {}
+    if origin:
+        # Mirror the origin back so the browser can read the error body
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"{type(exc).__name__}: {exc}"},
+        headers=headers,
+    )
 
 # Serve local receipt images during development
 if settings.USE_LOCAL_STORAGE:
