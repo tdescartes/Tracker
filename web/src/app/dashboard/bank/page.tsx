@@ -1,13 +1,38 @@
 "use client";
 
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { bankApi, api } from "@/lib/api";
 import { useDropzone } from "react-dropzone";
 import {
     FileText, UploadCloud, RefreshCw, Link2, Unlink, RefreshCcw, CheckCircle2,
-    Filter, ArrowUpDown, Tag,
+    Filter, Tag,
 } from "lucide-react";
+
+/* ─── Elapsed-time hook for long-running operations ─── */
+function useElapsedSeconds(running: boolean) {
+    const [elapsed, setElapsed] = useState(0);
+    const ref = useRef<ReturnType<typeof setInterval>>(undefined);
+    useEffect(() => {
+        if (running) {
+            setElapsed(0);
+            ref.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+        } else {
+            clearInterval(ref.current);
+        }
+        return () => clearInterval(ref.current);
+    }, [running]);
+    return elapsed;
+}
+
+/* ─── Friendly progress message based on elapsed time ─── */
+function bankProgressMessage(seconds: number): string {
+    if (seconds < 3) return "Uploading statement…";
+    if (seconds < 8) return "Extracting text from document…";
+    if (seconds < 20) return "AI is parsing transactions…";
+    if (seconds < 40) return "Structuring data — large statements take longer…";
+    return "Still working — hang tight…";
+}
 
 const CATEGORY_COLORS: Record<string, string> = {
     Groceries: "bg-green-100 text-green-700",
@@ -56,6 +81,8 @@ export default function BankPage() {
             qc.invalidateQueries({ queryKey: ["bank-transactions"] });
         },
     });
+
+    const elapsed = useElapsedSeconds(uploadMutation.isPending);
 
     const reconcileMutation = useMutation({
         mutationFn: () => bankApi.reconcile().then((r) => r.data),
@@ -199,8 +226,10 @@ export default function BankPage() {
                     {uploadMutation.isPending ? (
                         <>
                             <div className="w-10 h-10 mx-auto mb-3 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-                            <p className="text-gray-700 font-medium">AI is analyzing your statement…</p>
-                            <p className="text-sm text-neutral mt-1">PaddleOCR + Gemini pipeline</p>
+                            <p className="text-gray-700 font-medium">{bankProgressMessage(elapsed)}</p>
+                            <p className="text-sm text-neutral mt-1">
+                                {elapsed}s elapsed — PaddleOCR + Gemini pipeline
+                            </p>
                         </>
                     ) : (
                         <>
@@ -215,6 +244,17 @@ export default function BankPage() {
                     )}
                 </div>
             </div>
+
+            {uploadMutation.isError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
+                    <p className="font-medium">Upload failed</p>
+                    <p className="mt-1">
+                        {(uploadMutation.error as any)?.response?.data?.detail
+                            || (uploadMutation.error as any)?.message
+                            || "Please try again with a different file."}
+                    </p>
+                </div>
+            )}
 
             {/* Upload Result Panel */}
             {uploadResult && (
@@ -297,6 +337,7 @@ export default function BankPage() {
                             <select
                                 value={typeFilter}
                                 onChange={(e) => setTypeFilter(e.target.value)}
+                                aria-label="Filter by transaction type"
                                 className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white"
                             >
                                 <option value="all">All types</option>
@@ -310,6 +351,7 @@ export default function BankPage() {
                             <select
                                 value={categoryFilter}
                                 onChange={(e) => setCategoryFilter(e.target.value)}
+                                aria-label="Filter by category"
                                 className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white"
                             >
                                 <option value="all">All categories</option>
