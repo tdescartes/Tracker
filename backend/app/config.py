@@ -14,7 +14,8 @@ class Settings(BaseSettings):
     USE_PADDLEOCR: bool = True  # Use PaddleOCR (CPU) as primary OCR engine
 
     # AI / LLM — Gemini for receipt structuring
-    GEMINI_API_KEY: str = ""  # Google AI Studio key for Gemini 2.0 Flash
+    GEMINI_API_KEY: str = ""  # Google AI Studio key
+    GEMINI_API_MODEL: str = "gemini-3-flash-preview"
 
     # Storage — local disk now, S3/MinIO later
     USE_LOCAL_STORAGE: bool = True
