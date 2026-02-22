@@ -53,7 +53,8 @@ export const receiptApi = {
     upload: (file: File) => {
         const form = new FormData();
         form.append("file", file);
-        return api.post("/api/receipts/upload", form);
+        // OCR + AI structuring can take 15–45s on CPU — give it 2 full minutes
+        return api.post("/api/receipts/upload", form, { timeout: 120_000 });
     },
     confirm: (id: string, data: object) => api.post(`/api/receipts/${id}/confirm`, data),
     list: () => api.get("/api/receipts/"),
@@ -69,7 +70,8 @@ export const bankApi = {
     upload: (file: File) => {
         const form = new FormData();
         form.append("file", file);
-        return api.post("/api/bank/upload-statement", form);
+        // OCR + AI structuring can take 15–45s on CPU — give it 2 full minutes
+        return api.post("/api/bank/upload-statement", form, { timeout: 120_000 });
     },
     transactions: () => api.get("/api/bank/transactions"),
     reconcile: () => api.post("/api/bank/reconcile"),
