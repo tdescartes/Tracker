@@ -15,6 +15,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./database/migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
       - ./database/migrations/002_phase2_3_schema.sql:/docker-entrypoint-initdb.d/02_phase2_3.sql
+      - ./database/migrations/003_ai_pipeline_schema.sql:/docker-entrypoint-initdb.d/03_ai_pipeline.sql
     ports:
       - "5432:5432"
     healthcheck:
@@ -47,6 +48,8 @@ services:
       PLAID_CLIENT_ID: ${PLAID_CLIENT_ID:-}
       PLAID_SECRET: ${PLAID_SECRET:-}
       PLAID_ENV: ${PLAID_ENV:-sandbox}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_API_MODEL: ${GEMINI_API_MODEL:-gemini-2.0-flash}
     volumes:
       - uploads_data:/app/uploads
     ports:
