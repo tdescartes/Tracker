@@ -157,11 +157,11 @@ async def sync_transactions(
         await db.execute(
             text("""
                 INSERT INTO bank_transactions
-                    (id, household_id, date, description, amount, is_income, is_subscription,
-                     category, merchant_name, plaid_transaction_id)
+                    (id, household_id, transaction_date, description, amount, is_income,
+                     is_subscription, category, raw_description, source, plaid_transaction_id)
                 VALUES
                     (:id, :hid, :date, :desc, :amount, :is_income, :is_sub,
-                     :category, :merchant, :plaid_id)
+                     :category, :raw_desc, 'plaid', :plaid_id)
                 ON CONFLICT (plaid_transaction_id) WHERE plaid_transaction_id IS NOT NULL
                 DO NOTHING
             """),
@@ -174,7 +174,7 @@ async def sync_transactions(
                 "is_income": tx["is_income"],
                 "is_sub": is_sub,
                 "category": tx.get("category", "Uncategorized"),
-                "merchant": tx.get("merchant_name", ""),
+                "raw_desc": tx.get("merchant_name", ""),
                 "plaid_id": tx.get("plaid_transaction_id"),
             },
         )
