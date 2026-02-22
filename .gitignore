@@ -83,3 +83,10 @@ mobile/*.tgz
 mobile/expo-*.tgz
 mobile/react-native-*.tgz
 mobile/.expo/
+
+# =========================================
+# Temporary / fix artifacts
+# =========================================
+backend/fix/
+*.tsbuildinfo
+web/*.tsbuildinfo
