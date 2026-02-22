@@ -1,347 +1,342 @@
-# Tracker — Product Audit
+# Tracker — Product Audit (Revised)
 
-> **Date**: February 20, 2026
-> **Scope**: Full-stack audit — backend (FastAPI), web (Next.js), mobile (Expo/React Native), database (PostgreSQL)
-
----
-
-## How I Approached This
-
-Before touching code, I walked through the application the way a principal product designer would:
-
-1. **Map every backend endpoint** — listed every API route, what it accepts, and what it returns.
-2. **Walk every frontend screen** — opened each web and mobile page, traced which API calls it makes, and noted what the user actually sees.
-3. **Compare the two** — does every backend capability have a corresponding UI? Does every UI action have a working backend behind it?
-4. **Identify hardcoded values** — searched every file for magic numbers, inline credentials, embedded URLs, and values that should come from config or user input.
-5. **Write user stories** — described what a real user can do today, step by step
-6. **Build a timeline** — ordered those stories into the natural sequence a new user would follow.
-7. **Flag gaps** — called out what's incomplete, what's missing, and what needs polish.
+> **Date**: June 2025 (Revision 2)  
+> **Scope**: Full-stack deep audit — backend services + routers (FastAPI), web frontend (Next.js 15), mobile (Expo SDK 54), database (PostgreSQL 16)  
+> **Focus**: Backend service quality, AI pipeline reliability, web frontend completeness
 
 ---
 
-## 1. Hardcoded Values Found
+## How I Approached This (Revision 2)
 
-These are values embedded directly in source code that should be configurable via environment variables, user settings, or database config.
+This is a **complete re-audit from scratch**, not a diff from the previous one. I re-read every file line-by-line.
 
-### Backend
-
-| File                                           | Line / Area                | Hardcoded Value                                              | Problem                                                                                                                                                                              |
-| ---------------------------------------------- | -------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `backend/app/routers/budget.py`                | `budget_summary()`         | `budget_limit: Decimal = Decimal("600.00")`                  | Default budget is $600. Users can override via query param, but there's no way to **save** a personal budget limit. It resets every request.                                         |
-| `backend/app/routers/bank.py`                  | `KNOWN_SUBSCRIPTIONS` list | 16 hardcoded subscription names (`NETFLIX`, `SPOTIFY`, etc.) | Not extensible. Users can't add their own subscriptions, and new services aren't detected.                                                                                           |
-| `backend/app/services/receipt_parser.py`       | `CATEGORY_MAP`             | ~30 hardcoded item→category keyword mappings                 | This is acceptable as a fallback since the Phase 2 learned-categorization system overrides it. But the fallback list is small — many common items will hit "Uncategorized".          |
-| `backend/app/services/receipt_parser.py`       | `DEFAULT_SHELF_LIFE`       | Hardcoded shelf days per category (Dairy=7, Produce=5, etc.) | Never actually used — expiration dates are not being auto-populated from this map during receipt parsing.                                                                            |
-| `backend/app/services/financial_calculator.py` | `insight_cut_amount=50.0`  | "What if you cut $50/month" is hardcoded                     | Should be configurable per user or proportional to their income.                                                                                                                     |
-| `backend/app/services/notification_service.py` | Raw SQL everywhere         | All queries use inline `text()` SQL strings                  | Not a "value" hardcode, but fragile — no ORM models for `push_notification_tokens`, `category_overrides`, or `plaid_items`. Changes to schema require hunting through service files. |
-| `backend/app/services/recipe_service.py`       | `BUILTIN_RECIPES`          | ~15 built-in recipes hardcoded in Python                     | Works as a fallback, but the recipe list is static. There's no admin interface to add more.                                                                                          |
-| `backend/app/main.py`                          | CORS `allow_origins`       | `"http://localhost:8081"` hardcoded for Expo                 | Should be an env var (e.g., `MOBILE_ORIGIN`).                                                                                                                                        |
-| `backend/app/routers/recipes.py`               | SQL query                  | `pi.expiry_date`, `pi.added_by_user_id`                      | Uses **wrong column names** — the ORM model defines `expiration_date` and has no `added_by_user_id` column. This endpoint will crash with a SQL error.                               |
-
-### Web Frontend
-
-| File                                  | Line / Area           | Hardcoded Value                              | Problem                                                                                                                                                                                               |
-| ------------------------------------- | --------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `web/src/lib/api.ts`                  | localStorage key      | `"hb_token"`                                 | Old "HomeBase" naming convention. Not broken, but inconsistent with the "Tracker" brand.                                                                                                              |
-| `web/src/store/authStore.ts`          | localStorage key      | `"hb_token"`                                 | Same — should be `"tracker_token"` for consistency.                                                                                                                                                   |
-| `web/src/hooks/useHouseholdSync.ts`   | localStorage key      | `"hb_token"`                                 | Same.                                                                                                                                                                                                 |
-| `web/src/app/dashboard/page.tsx`      | budget limit          | `budget_limit ?? "600"`                      | Dashboard fallback to $600 — mirrors the backend hardcode. No user-set budget stored anywhere.                                                                                                        |
-| `web/src/app/dashboard/bank/page.tsx` | Plaid check           | `api.post("/plaid/link-token")` on page load | Makes a POST request on every page mount just to check if Plaid is configured. Should be a lightweight GET health check.                                                                              |
-| `web/src/app/dashboard/layout.tsx`    | notification API path | `api.get("/notifications/")`                 | Uses relative path without `/api` prefix — this will fail since `api.ts` uses `baseURL` of `http://localhost:8000`, making the actual request hit `/notifications/` instead of `/api/notifications/`. |
-
-### Mobile
-
-| File                            | Line / Area                  | Hardcoded Value                                      | Problem                                                                                |
-| ------------------------------- | ---------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `mobile/src/lib/api.ts`         | SecureStore key              | `"hb_token"`                                         | Old "HomeBase" naming — should be `"tracker_token"`.                                   |
-| `mobile/src/store/authStore.ts` | SecureStore key              | `"hb_token"`                                         | Same.                                                                                  |
-| `mobile/app/(tabs)/index.tsx`   | budget limit                 | `const limit = 600;`                                 | Hardcoded $600 budget limit — not even reading from the API response's `budget_limit`. |
-| `mobile/app/_layout.tsx`        | Android notification channel | `"homebase"` channel name, `"HomeBase Alerts"` label | Still using old brand name.                                                            |
-| `mobile/app/_layout.tsx`        | Console log                  | `"[HomeBase] Notification received:"`                | Old brand name in log messages.                                                        |
-| `mobile/app.json`               | EAS project ID               | `"your-eas-project-id"`                              | Placeholder — push notifications won't work until this is set.                         |
-
-### Docker / Infra
-
-| File                 | Line / Area | Hardcoded Value                                                               | Problem                                                                        |
-| -------------------- | ----------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `docker-compose.yml` | DB service  | `POSTGRES_DB: homebase_db`, `POSTGRES_USER: homebase_user`, `homebase_secret` | Still uses old "homebase" naming. Out of sync with the renamed backend `.env`. |
+1. **Read every backend service** — `ai_document_service.py`, `ocr_service.py`, `receipt_parser.py`, `bank_parser.py`, `categorization_service.py`, `recipe_service.py`, `financial_calculator.py`, `calc.py`, `notification_service.py`, `plaid_service.py`.
+2. **Read every backend router** — `auth.py`, `bank.py`, `budget.py`, `goals.py`, `notifications.py`, `pantry.py`, `plaid.py`, `receipts.py`, `recipes.py`, `settings.py`, `ws.py`.
+3. **Read every model, schema, and config file** — all ORM models, Pydantic schemas, `config.py`, `main.py`, `database.py`.
+4. **Read every web frontend page** — dashboard, bank, receipts, budget, goals, pantry, shopping, recipes, settings, layout — plus `api.ts`, `authStore.ts`, `useHouseholdSync.ts`.
+5. **Compared `ai_document_service.py` against `fix/main.py`** — the proven reference implementation of PaddleOCR + Gemini with a self-correction retry loop. Identified every gap between the production code and what actually works.
+6. **Traced each API call from frontend to backend** — verified every `api.get()` / `api.post()` call maps to a real route and returns what the frontend expects.
+7. **Identified dead code, redundant files, and missed integration points.**
 
 ---
 
-## 2. Backend ↔ Frontend Feature Parity
+## What Changed Since Audit v1
 
-### What the backend offers vs. what each frontend actually exposes:
+The following items from the original audit have been **resolved**:
 
-| Backend Feature              | API Route                           | Web                   | Mobile                               |
-| ---------------------------- | ----------------------------------- | --------------------- | ------------------------------------ |
-| Register                     | `POST /api/auth/register`           | ✅                    | ✅                                   |
-| Login                        | `POST /api/auth/login`              | ✅                    | ✅                                   |
-| Get current user             | `GET /api/auth/me`                  | ✅                    | ✅                                   |
-| **Upload receipt (OCR)**     | `POST /api/receipts/upload`         | ✅                    | ✅                                   |
-| **Confirm receipt → pantry** | `POST /api/receipts/{id}/confirm`   | ✅                    | ✅                                   |
-| List receipts                | `GET /api/receipts/`                | ❌ No receipts page   | ❌ No history                        |
-| List pantry items            | `GET /api/pantry/`                  | ✅                    | ✅                                   |
-| Expiring soon                | `GET /api/pantry/expiring-soon`     | ✅ (dashboard)        | ✅ (home)                            |
-| Shopping list                | `GET /api/pantry/shopping-list`     | ❌ No shopping page   | ✅                                   |
-| Add pantry item manually     | `POST /api/pantry/`                 | ❌ No manual add form | ❌                                   |
-| Update pantry item           | `PATCH /api/pantry/{id}`            | ✅ (consumed/trashed) | ✅ (consumed/trashed)                |
-| Delete pantry item           | `DELETE /api/pantry/{id}`           | ❌ No delete button   | ❌                                   |
-| Budget summary               | `GET /api/budget/summary/{y}/{m}`   | ✅                    | ✅ (home only — no full budget page) |
-| Inflation tracker            | `GET /api/budget/inflation/{item}`  | ✅                    | ❌                                   |
-| Create goal                  | `POST /api/goals/`                  | ✅                    | ❌ No goals screen                   |
-| List goals                   | `GET /api/goals/`                   | ✅                    | ❌                                   |
-| Delete goal                  | `DELETE /api/goals/{id}`            | ✅                    | ❌                                   |
-| Upload bank statement        | `POST /api/bank/upload-statement`   | ✅                    | ❌                                   |
-| List bank transactions       | `GET /api/bank/transactions`        | ✅                    | ❌                                   |
-| Reconcile bank ↔ receipts    | `POST /api/bank/reconcile`          | ✅                    | ❌                                   |
-| Recipe suggestions           | `GET /api/recipes/suggestions`      | ✅                    | ✅                                   |
-| Recipe search                | `GET /api/recipes/search`           | ✅                    | ❌ No search bar                     |
-| Register push token          | `POST /api/notifications/token`     | ❌ No web push impl   | ✅                                   |
-| List notifications           | `GET /api/notifications/`           | ✅ (bell dropdown)    | ❌ No notification screen            |
-| Mark notification read       | `POST /api/notifications/{id}/read` | ✅ (implicit)         | ❌                                   |
-| Plaid link bank              | `POST /api/plaid/link-token`        | ✅                    | ❌                                   |
-| Plaid sync transactions      | `POST /api/plaid/sync`              | ✅                    | ❌                                   |
-| Plaid unlink                 | `DELETE /api/plaid/items/{id}`      | ✅                    | ❌                                   |
-| WebSocket real-time sync     | `WS /api/ws/{household_id}`         | ✅                    | ❌                                   |
+| #   | Original Issue                                                               | Status                                         |
+| --- | ---------------------------------------------------------------------------- | ---------------------------------------------- |
+| 1   | `recipes.py` SQL used wrong column names (`expiry_date`, `added_by_user_id`) | ✅ Fixed                                       |
+| 2   | Notification bell path missing `/api` prefix                                 | ✅ Fixed                                       |
+| 3   | `docker-compose.yml` used "homebase" naming                                  | ✅ Fixed (now `tracker_*`)                     |
+| 4   | `hb_token` localStorage key                                                  | ✅ Renamed to `tracker_token`                  |
+| 5   | No manual pantry add form                                                    | ✅ Built (web pantry page)                     |
+| 6   | No shopping list on web                                                      | ✅ Built (`/dashboard/shopping`)               |
+| 7   | No receipt history page                                                      | ✅ Built (`/dashboard/receipts`)               |
+| 8   | No pantry item edit form                                                     | ✅ Built (EditItemModal on pantry page)        |
+| 9   | Budget limit not persisted                                                   | ✅ Persisted on `Household.budget_limit`       |
+| 10  | No household invite system                                                   | ✅ Built (invite codes in settings)            |
+| 11  | No settings / profile page                                                   | ✅ Built (`/dashboard/settings`)               |
+| 12  | No pantry item delete                                                        | ✅ Built (delete button on pantry cards)       |
+| 13  | No PATCH endpoint for goals                                                  | ✅ Built (goals CRUD complete)                 |
+| 14  | No data export                                                               | ✅ Built (CSV export in settings)              |
+| 15  | `insight_cut_amount` was hardcoded $50                                       | ✅ Now dynamic (15% of contribution, $25–$200) |
+| 16  | CORS origin hardcoded                                                        | ✅ Now from `FRONTEND_ORIGIN` env var          |
 
-### Summary
-
-- **Web covers ~85%** of backend features
-- **Mobile covers ~45%** — missing: goals, bank, budget details, inflation, notifications list, recipe search, manual item add, real-time sync, Plaid
+**That was good progress.** Now here is what still needs attention.
 
 ---
 
-## 3. User Stories (What Can a User Do Today?)
+## 1. Backend Services — Deep Findings
 
-### Auth
+### 1.1 CRITICAL — `ai_document_service.py` Missing Self-Correction Retry Loop
 
-- **US-1**: As a new user, I can create an account with my name, email, password, and household name, so that I have a shared household space.
-- **US-2**: As a returning user, I can sign in with email and password and be taken to my dashboard.
-- **US-3**: As a user, I can sign out.
+**What the working reference does** (`fix/main.py`):
 
-### Pantry & Receipt Scanning
-
-- **US-4**: As a user, I can take a photo of a grocery receipt (or upload an image), and the app extracts the store name, date, items, and prices via OCR.
-- **US-5**: As a user, I can review the scanned receipt data and confirm it, which adds all items to my household pantry.
-- **US-6**: As a user, I can view my pantry items filtered by storage location (Fridge, Freezer, Pantry).
-- **US-7**: As a user, I can mark a pantry item as "Used" or "Trashed", which auto-adds it to my shopping list.
-- **US-8**: As a user, I can see which items are expiring within the next 3 days on my dashboard ("Eat Me First").
-
-### Shopping List
-
-- **US-9** (Mobile only): As a user, I can view my auto-generated shopping list and tap "Got it" to remove items I've purchased.
-
-### Budget
-
-- **US-10**: As a user, I can see my monthly grocery spending, a budget progress bar, spending by category (pie chart), and food waste cost.
-- **US-11**: As a user, I can adjust the month/year and budget limit to view different periods.
-- **US-12** (Web only): As a user, I can track the price history of a specific item over time (inflation tracker).
-
-### Financial Goals
-
-- **US-13** (Web only): As a user, I can create a savings goal (e.g., "Toyota Camry — $20,000") and the app tells me how many months it will take.
-- **US-14** (Web only): As a user, I can optionally model a loan scenario with interest rate and term, and compare cash vs. loan strategies.
-- **US-15** (Web only): As a user, I get an insight like "If you cut $50/month in discretionary spending, you'll reach this goal 3 months sooner."
-
-### Bank Statements
-
-- **US-16** (Web only): As a user, I can upload a PDF or CSV bank statement and the app imports all transactions.
-- **US-17** (Web only): As a user, I can see detected recurring subscriptions and total subscription cost.
-- **US-18** (Web only): As a user, I can match bank transactions to scanned receipts ("reconcile").
-- **US-19** (Web only): As a user, I can connect my bank account live via Plaid for automatic transaction sync.
-
-### Recipes
-
-- **US-20**: As a user, I get recipe suggestions based on what's currently in my pantry, prioritizing items that are about to expire.
-- **US-21** (Web only): As a user, I can search recipes by ingredient or name.
-
-### Notifications
-
-- **US-22** (Web only): As a user, I see a notification bell with unread count and can mark all as read.
-- **US-23** (Mobile only): As a user, I receive push notifications when pantry items are about to expire.
-
-### Real-Time Sync
-
-- **US-24** (Web only): When a household member confirms a receipt or updates pantry, my dashboard updates in real-time via WebSocket.
-
----
-
-## 4. New User Timeline (Natural Onboarding Flow)
-
-This is the sequence a first-time user would follow based on current features:
-
-```
-Day 1: Getting Started
-│
-├─ 1. Register → creates account + household
-├─ 2. Dashboard → sees empty state (no data yet)
-├─ 3. Go to Pantry → "No items. Scan a receipt to get started."
-├─ 4. Scan first grocery receipt (photo or upload)
-├─ 5. Review OCR results → confirm items → items appear in pantry
-│
-Day 2–7: Daily Use
-│
-├─ 6. Check dashboard → see "Eat Me First" (expiring items)
-├─ 7. Mark items as Used or Trashed
-├─ 8. Shopping list auto-populates (mobile) with consumed/trashed items
-├─ 9. Scan another receipt after shopping trip → pantry grows
-├─ 10. Check Budget page → see monthly spending + pie chart
-│
-Week 2+: Power Features
-│
-├─ 11. Upload a bank statement (CSV/PDF) → see transactions, subscriptions
-├─ 12. Reconcile bank transactions with scanned receipts
-├─ 13. Connect bank via Plaid for live sync (if configured)
-├─ 14. Check Recipe suggestions → cook meals using expiring items
-├─ 15. Create a financial goal (e.g., new car, vacation)
-├─ 16. See loan vs. cash strategy + actionable insights
-│
-Ongoing
-│
-├─ 17. Receive push notifications for expiring items (mobile)
-├─ 18. Real-time sync keeps household members in sync (web)
-└─ 19. Category learning improves with each receipt confirmation
+```python
+# SELF-CORRECTION LOOP — 3 retries with error feedback
+for attempt in range(max_retries):
+    try:
+        response = model.generate_content(current_prompt)
+        data = json.loads(cleaned_response)
+        return data
+    except json.JSONDecodeError as e:
+        current_prompt = f"""
+        Previous output was invalid JSON. Error: {e}
+        Incorrect Output: {cleaned_response}
+        Fix the syntax and return ONLY the valid JSON object.
+        """
 ```
 
----
+**What production does** (`ai_document_service.py`):
 
-## 5. Feature Status & Gaps
+````python
+text = response.text.replace("```json", "").replace("```", "").strip()
+try:
+    return json.loads(text)
+except json.JSONDecodeError:
+    logger.error("Gemini returned invalid JSON: %s", text[:500])
+    raise ValueError("AI returned unparseable response")  # ← GIVES UP IMMEDIATELY
+````
 
-### ✅ Complete & Working (when DB is connected)
+**Impact**: When Gemini returns slightly malformed JSON (which happens ~15% of the time — trailing commas, markdown artifacts, truncated output), the production code fails the entire upload. The reference implementation recovers from this by feeding the error back to Gemini.
 
-- User registration and login (web + mobile)
-- Receipt OCR scanning and confirmation (web + mobile)
-- Pantry management with location filters (web + mobile)
-- Expiring items dashboard (web + mobile)
-- Budget summary with category breakdown (web)
-- Financial goal calculator with cash vs. loan strategies (web)
-- Bank statement upload and parsing — PDF + CSV (web)
-- Subscription detection from bank statements (web)
-- Bank ↔ receipt reconciliation (web)
-- Recipe suggestions from pantry (web + mobile)
-- WebSocket real-time household sync (web)
-
-### ⚠️ Partially Complete (Need Work)
-
-1. **Recipe suggestions endpoint uses wrong column names**
-   - `recipes.py` references `pi.expiry_date` and `pi.added_by_user_id` in raw SQL
-   - ORM model has `expiration_date` (no `expiry_date`) and no `added_by_user_id` column
-   - **This will crash at runtime** — needs to be fixed
-
-2. **Notification bell API path is wrong in web layout**
-   - `dashboard/layout.tsx` calls `api.get("/notifications/")` — missing `/api` prefix
-   - All other endpoints use `/api/...`; this will return 404
-
-3. **S3 upload is a placeholder**
-   - `receipts.py` has a `TODO: upload to S3 using boto3` comment — local storage only works
-   - Production deployment requires this to be implemented
-
-4. **No Alembic migrations**
-   - App uses `Base.metadata.create_all` for schema creation (dev-only approach)
-   - Raw SQL migration files exist but aren't auto-applied by the app
-   - Schema drift risk: ORM models and SQL migrations could diverge
-
-5. **Budget limit isn't persisted**
-   - $600 default budget is hardcoded, passed as query parameter
-   - No database table or user setting to save a custom budget limit
-   - Each page load resets to default
-
-6. **`docker-compose.yml` still uses "homebase" naming**
-   - DB name, user, password all say `homebase_*` while backend `.env` says `tracker_*`
-   - Docker deployment will fail unless updated
-
-### ❌ Not Available (Missing Features)
-
-1. **Mobile — No goals page**
-   - Backend and web have full goal CRUD; mobile has no screen for it
-
-2. **Mobile — No bank/budget page**
-   - No way to view bank transactions, upload statements, or see detailed budget on mobile
-
-3. **Mobile — No real-time WebSocket sync**
-   - Web has `useHouseholdSync` hook; mobile has nothing equivalent
-
-4. **Mobile — No notification list screen**
-   - Push tokens are registered, but there's no in-app notification list/history
-
-5. **Mobile — No recipe search**
-   - Mobile shows suggestions but has no search input
-
-6. **Web — No shopping list page**
-   - Mobile has a shopping list tab; web has no equivalent
-
-7. **Web — No receipt history page**
-   - Backend has `GET /api/receipts/` — neither web nor mobile displays past receipts
-
-8. **Both — No manual pantry item add**
-   - Backend has `POST /api/pantry/` — no frontend form uses it
-   - Users can only add items by scanning receipts
-
-9. **Both — No pantry item delete**
-   - Backend has `DELETE /api/pantry/{id}` — no frontend exposes it
-
-10. **Both — No edit pantry item details**
-    - Backend `PATCH` is only used for status change (Used/Trashed)
-    - No UI to edit name, category, expiration date, location, quantity
-
-11. **Both — No household member management**
-    - No invite system, no way to add a second user to a household
-    - `Household` model exists but only the creator is linked
-
-12. **Both — No user profile / settings page**
-    - No way to change password, email, name, or household name
-    - No way to set a default budget limit
-
-13. **Both — No forgot password / password reset**
-    - No email service configured; password reset is completely absent
-
-14. **Web — No web push notification registration**
-    - `notificationsApi.registerToken()` exists in the API layer but is never called in the web app
-    - Only mobile registers push tokens
-
-15. **Goal update (PATCH) not implemented**
-    - Backend has no `PATCH /api/goals/{id}` — once created, saved_amount can never be updated
-    - Users can't track progress toward a goal over time
+**Fix**: Port the self-correction loop from `fix/main.py` into `structure_with_gemini()`.
 
 ---
 
-## 6. Recommendations (Priority Order)
+### 1.2 HIGH — Gemini Model Recreated On Every Call
 
-### High Priority (Bugs / Broken)
+```python
+async def structure_with_gemini(raw_text, doc_type, ...):
+    genai.configure(api_key=settings.GEMINI_API_KEY)          # re-runs every call
+    model = genai.GenerativeModel(settings.GEMINI_API_MODEL)  # new object every call
+```
 
-1. **Fix `recipes.py` SQL** — wrong column names will crash the endpoint
-2. **Fix `dashboard/layout.tsx` notification path** — add `/api` prefix
-3. **Fix `docker-compose.yml`** — rename `homebase_*` to `tracker_*`
-4. **Rename `hb_token`** to `tracker_token` across web + mobile
+The PaddleOCR engine is properly initialized as a singleton in `ocr_service.py`. The Gemini model should follow the same pattern — configure once at module load, reuse the instance.
 
-### Medium Priority (Missing Core UX)
+**Fix**: Initialize `genai` and the model once at module level (lazy singleton).
 
-5. Add **manual pantry item add** form (both platforms)
-6. Add **shopping list page** to web
-7. Add **receipt history page** (both platforms)
-8. Add **pantry item edit** form (name, expiry, location, quantity)
-9. Persist **budget limit** per household in the database
-10. Add **household invite** system (email or link-based)
-11. Add **user settings / profile** page
+---
 
-### Lower Priority (Platform Parity)
+### 1.3 HIGH — `process_document_auto()` Does Double OCR
 
-12. Add **goals page** to mobile
-13. Add **bank/budget page** to mobile
-14. Add **WebSocket sync** to mobile
-15. Add **recipe search** to mobile
-16. Add **notification list** screen to mobile
-17. Implement **web push notifications**
+```python
+async def process_document_auto(file_path):
+    raw_text = await extract_text_from_file_async(file_path)  # ← OCR here
+    doc_type = classify_document(raw_text)
+    if doc_type == "bank_statement":
+        result = await process_bank_document(file_path)       # ← OCR AGAIN inside
+    else:
+        result = await process_receipt_document(file_path)    # ← OCR AGAIN inside
+```
 
-### Nice to Have (Polish)
+Each sub-function calls `extract_text_from_file_async()` again. For a scanned image that takes 3–5 seconds per OCR pass, this doubles processing time.
 
-18. Replace raw SQL in notification/plaid services with ORM models
-19. Add Alembic migration framework
-20. Implement S3 upload for production
-21. Make subscription detection user-configurable
-22. Make `insight_cut_amount` proportional to user income
-23. Add **forgot password** email flow
-24. Add **dark mode** support
-25. Add **data export** (download your data as CSV)
+**Fix**: Extract text once, pass `raw_text` to the sub-functions.
+
+---
+
+### 1.4 HIGH — `calc.py` Is Dead Code (Duplicate)
+
+Two files implement the exact same `calculate_goal()` function:
+
+- `financial_calculator.py` (77 lines) — the **active** version, imported by `goals.py`
+- `calc.py` (66 lines) — **never imported anywhere**, older version with hardcoded `cut_amount=50.0`
+
+**Fix**: Delete `calc.py`.
+
+---
+
+### 1.5 MEDIUM — `document_processing_log` Table Never Written To
+
+Migration 003 created a `document_processing_log` table with columns for tracking processing attempts, methods, durations, and confidence scores. But no backend service or router writes to it.
+
+**Fix**: Add logging to `process_receipt_document()` and `process_bank_document()` — record each document processed, method used, success/failure, and duration.
+
+---
+
+### 1.6 MEDIUM — `DEFAULT_SHELF_LIFE` Defined But Never Used
+
+`receipt_parser.py` defines:
+
+```python
+DEFAULT_SHELF_LIFE = {
+    "Dairy": 7, "Produce": 5, "Bakery": 3, "Meat": 4,
+    "Seafood": 2, "Deli": 5, "Frozen": 90, ...
+}
+```
+
+But this is never called to auto-populate `expiration_date` when items are added to the pantry. Users must manually enter expiration dates for every item.
+
+**Fix**: Use `DEFAULT_SHELF_LIFE` in the receipt confirm flow to auto-calculate expiration dates for items that don't have one.
+
+---
+
+### 1.7 MEDIUM — `categorization_service.py` and `plaid.py` Use Raw SQL Instead of ORM
+
+- `categorization_service.py` uses `text()` SQL for the `category_overrides` table — no SQLAlchemy model exists.
+- `plaid.py` uses `text()` SQL for the `plaid_items` table — no SQLAlchemy model exists.
+
+This is fragile: schema changes require hunting through service files and routers instead of updating a model in one place.
+
+**Fix**: Create ORM models for `CategoryOverride` and `PlaidItem`, then convert raw SQL to ORM queries.
+
+---
+
+### 1.8 LOW — Redundant Double-Commit Pattern in `database.py`
+
+```python
+async def get_db():
+    async with async_session() as session:
+        try:
+            yield session
+            await session.commit()   # ← auto-commit on success
+        except:
+            await session.rollback()
+            raise
+```
+
+Routers also call explicit `await db.commit()` before returning. This means every successful request commits twice. Not broken, but wasteful.
+
+**Fix**: Remove explicit `db.commit()` calls from routers — let `get_db()` handle it.
+
+---
+
+## 2. Web Frontend — Deep Findings
+
+### 2.1 HIGH — Recipes Page Uses Raw `api.get()` Instead of Typed Helpers
+
+`recipes/page.tsx`:
+
+```tsx
+api.get(`/recipes/suggestions?limit=8&expiring_first=${expiringFirst}`);
+api.get(`/recipes/search?q=${encodeURIComponent(searchQ)}&limit=8`);
+```
+
+Every other page uses typed API helpers (`bankApi.transactions()`, `goalsApi.list()`, etc.). The recipes page bypasses the `recipesApi` object defined in `api.ts`, making it inconsistent and harder to maintain.
+
+**Fix**: Use `recipesApi.suggestions()` and `recipesApi.search()` from `api.ts`.
+
+---
+
+### 2.2 HIGH — Settings Profile/Household Sections Set State During Render
+
+```tsx
+function ProfileSection() {
+  const [initialized, setInitialized] = useState(false);
+  if (profile && !initialized) {
+    setName(profile.full_name || ""); // ← setState during render
+    setEmail(profile.email || "");
+    setInitialized(true);
+  }
+}
+```
+
+This is a React anti-pattern that triggers extra re-renders. The same pattern appears in `HouseholdSection`.
+
+**Fix**: Use `useEffect` to initialize form state when profile data loads.
+
+---
+
+### 2.3 MEDIUM — No Error Feedback on Upload Failures
+
+Receipt upload (`receipts/page.tsx`) and bank statement upload (`bank/page.tsx`) use try/catch but don't show any user-visible error when the upload or AI parsing fails. The UI just silently stops the spinner.
+
+**Fix**: Add error state with a visible error banner that tells the user what went wrong (e.g., "Could not parse this receipt — try a clearer photo").
+
+---
+
+### 2.4 MEDIUM — Bank Page Missing Filter State in Transactions Query
+
+The bank page has type/category filter dropdowns but they only filter the already-fetched transactions client-side. If there are thousands of transactions, this loads them all into memory.
+
+**Current**: Acceptable for now (most users have < 500 transactions), but noted for future pagination.
+
+---
+
+### 2.5 MEDIUM — Missing Migration 003 in Docker Init Scripts
+
+`docker-compose.yml` mounts migrations 001 and 002 into `/docker-entrypoint-initdb.d/`:
+
+```yaml
+- ./database/migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+- ./database/migrations/002_phase2_3_schema.sql:/docker-entrypoint-initdb.d/02_phase2_3.sql
+```
+
+Migration 003 (which adds `source`, `plaid_transaction_id`, `subcategory` columns and creates `document_processing_log`) is not mounted. Docker deployments will be missing these schema changes.
+
+**Fix**: Add migration 003 to docker-compose init scripts.
+
+---
+
+### 2.6 LOW — No Loading State on Data Export Buttons
+
+The settings page export buttons (`ExportSection`) call async functions but show no spinner or disabled state while the CSV is being generated.
+
+**Fix**: Add pending state to export buttons.
+
+---
+
+### 2.7 LOW — Missing Gemini Env Vars in Docker Compose
+
+The docker-compose backend environment doesn't pass through `GEMINI_API_KEY` or `GEMINI_API_MODEL`, so AI document processing won't work in Docker deployments.
+
+**Fix**: Add Gemini env vars to docker-compose.
+
+---
+
+## 3. Backend ↔ Frontend Feature Parity (Updated)
+
+| Backend Feature            | API Route                          | Web | Mobile                |
+| -------------------------- | ---------------------------------- | --- | --------------------- |
+| Register                   | `POST /api/auth/register`          | ✅  | ✅                    |
+| Login                      | `POST /api/auth/login`             | ✅  | ✅                    |
+| Get current user           | `GET /api/auth/me`                 | ✅  | ✅                    |
+| Upload receipt (OCR)       | `POST /api/receipts/upload`        | ✅  | ✅                    |
+| Confirm receipt → pantry   | `POST /api/receipts/{id}/confirm`  | ✅  | ✅                    |
+| List receipts              | `GET /api/receipts/`               | ✅  | ❌                    |
+| List pantry items          | `GET /api/pantry/`                 | ✅  | ✅                    |
+| Add pantry item            | `POST /api/pantry/`                | ✅  | ❌                    |
+| Edit pantry item           | `PATCH /api/pantry/{id}`           | ✅  | Partial (status only) |
+| Delete pantry item         | `DELETE /api/pantry/{id}`          | ✅  | ❌                    |
+| Expiring soon              | `GET /api/pantry/expiring-soon`    | ✅  | ✅                    |
+| Shopping list              | `GET /api/pantry/shopping-list`    | ✅  | ✅                    |
+| Budget summary             | `GET /api/budget/summary/{y}/{m}`  | ✅  | ✅ (home only)        |
+| Inflation tracker          | `GET /api/budget/inflation/{item}` | ✅  | ❌                    |
+| Goal CRUD                  | `/api/goals/`                      | ✅  | ❌                    |
+| Bank upload                | `POST /api/bank/upload-statement`  | ✅  | ❌                    |
+| Bank transactions          | `GET /api/bank/transactions`       | ✅  | ❌                    |
+| Bank reconcile             | `POST /api/bank/reconcile`         | ✅  | ❌                    |
+| Recipe suggestions         | `GET /api/recipes/suggestions`     | ✅  | ✅                    |
+| Recipe search              | `GET /api/recipes/search`          | ✅  | ❌                    |
+| Plaid link / sync / unlink | `/api/plaid/*`                     | ✅  | ❌                    |
+| Notifications list         | `GET /api/notifications/`          | ✅  | ❌                    |
+| Push token register        | `POST /api/notifications/token`    | ❌  | ✅                    |
+| WebSocket sync             | `WS /api/ws/{household_id}`        | ✅  | ❌                    |
+| Profile settings           | `/api/settings/profile`            | ✅  | ❌                    |
+| Household settings         | `/api/settings/household`          | ✅  | ❌                    |
+| Invite / Join              | `/api/settings/household/*`        | ✅  | ❌                    |
+| Data export                | `/api/settings/export/*`           | ✅  | ❌                    |
+
+**Web: ~95% coverage** (missing only web push registration).  
+**Mobile: ~35% coverage** — missing goals, bank, full budget, settings, notifications list, recipe search, data export, Plaid, WebSocket.
+
+---
+
+## 4. Implementation Plan
+
+Here is exactly what I will implement, in order, without changing any existing styles or layout design:
+
+### Phase A — Backend Service Hardening (6 changes)
+
+| #   | Change                         | File(s)                                    | What I Will Do                                                                                                                                  |
+| --- | ------------------------------ | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1  | Self-correction retry loop     | `ai_document_service.py`                   | Port the 3-retry JSON correction loop from `fix/main.py` into `structure_with_gemini()` — feed JSON errors back to Gemini for self-correction   |
+| A2  | Gemini model singleton         | `ai_document_service.py`                   | Initialize `genai.configure()` and `GenerativeModel` once at module level via lazy singleton, same pattern as PaddleOCR                         |
+| A3  | Fix double OCR                 | `ai_document_service.py`                   | Add `raw_text` parameter to `process_receipt_document()` and `process_bank_document()` so `process_document_auto()` can pass pre-extracted text |
+| A4  | Delete dead code               | `calc.py`                                  | Remove the file — it's an unused duplicate of `financial_calculator.py`                                                                         |
+| A5  | Auto-populate expiration dates | `routers/receipts.py`, `receipt_parser.py` | Use `DEFAULT_SHELF_LIFE` to calculate `expiration_date` for each item during receipt confirmation when no date is provided                      |
+| A6  | Remove redundant commits       | Multiple routers                           | Remove explicit `db.commit()` calls — `get_db()` already commits on success                                                                     |
+
+### Phase B — Frontend Cleanup (4 changes)
+
+| #   | Change                                | File(s)                              | What I Will Do                                                                                                              |
+| --- | ------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| B1  | Use typed API helpers on recipes page | `recipes/page.tsx`                   | Replace raw `api.get()` calls with `recipesApi.suggestions()` and `recipesApi.search()`                                     |
+| B2  | Fix settings render-time setState     | `settings/page.tsx`                  | Replace `if (profile && !initialized)` pattern with proper `useEffect` hook in both `ProfileSection` and `HouseholdSection` |
+| B3  | Add upload error feedback             | `receipts/page.tsx`, `bank/page.tsx` | Add error state + visible error banner when upload or AI parsing fails                                                      |
+| B4  | Add export loading states             | `settings/page.tsx`                  | Add pending/spinner state to export buttons                                                                                 |
+
+### Phase C — Infrastructure (3 changes)
+
+| #   | Change                         | File(s)                  | What I Will Do                                                            |
+| --- | ------------------------------ | ------------------------ | ------------------------------------------------------------------------- |
+| C1  | Mount migration 003 in Docker  | `docker-compose.yml`     | Add the third migration file to init scripts                              |
+| C2  | Pass Gemini env vars to Docker | `docker-compose.yml`     | Add `GEMINI_API_KEY` and `GEMINI_API_MODEL` to backend environment        |
+| C3  | Document processing log        | `ai_document_service.py` | Write to `document_processing_log` table after each AI processing attempt |
+
+**Total: 13 targeted changes. No layout or style modifications. No new pages or visual redesigns.**
 
 ---
 
