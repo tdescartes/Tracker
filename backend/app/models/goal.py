@@ -48,6 +48,8 @@ class BankTransaction(Base):
     linked_receipt_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("receipts.id"), nullable=True)
 
     raw_description: Mapped[str | None] = mapped_column(Text)  # Original text from PDF
+    source: Mapped[str] = mapped_column(String(20), default="upload")  # upload | plaid | manual
+    plaid_transaction_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     household: Mapped["Household"] = relationship("Household", back_populates="bank_transactions")
