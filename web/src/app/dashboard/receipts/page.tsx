@@ -1,12 +1,36 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { receiptApi } from "@/lib/api";
 import { useDropzone } from "react-dropzone";
 import {
     FileText, UploadCloud, ChevronDown, ChevronUp, Check, X, Edit3, Camera,
 } from "lucide-react";
+
+/* ─── Elapsed-time hook for long-running operations ─── */
+function useElapsedSeconds(running: boolean) {
+    const [elapsed, setElapsed] = useState(0);
+    const ref = useRef<ReturnType<typeof setInterval>>(undefined);
+    useEffect(() => {
+        if (running) {
+            setElapsed(0);
+            ref.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+        } else {
+            clearInterval(ref.current);
+        }
+        return () => clearInterval(ref.current);
+    }, [running]);
+    return elapsed;
+}
+
+/* ─── Friendly progress message based on elapsed time ─── */
+function progressMessage(seconds: number): string {
+    if (seconds < 3) return "Uploading file…";
+    if (seconds < 10) return "Running OCR text extraction…";
+    if (seconds < 25) return "AI is structuring the receipt…";
+    return "Still working — large documents take longer…";
+}
 
 export default function ReceiptsPage() {
     const qc = useQueryClient();
@@ -21,6 +45,8 @@ export default function ReceiptsPage() {
         mutationFn: (file: File) => receiptApi.upload(file).then((r) => r.data),
         onSuccess: (data) => setPendingReceipt(data),
     });
+
+    const elapsed = useElapsedSeconds(uploadMutation.isPending);
 
     const confirmMutation = useMutation({
         mutationFn: ({ id, payload }: { id: string; payload: any }) =>
@@ -62,19 +88,19 @@ export default function ReceiptsPage() {
                 <div
                     {...getRootProps()}
                     className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition ${isDragActive
-                            ? "border-primary bg-primary/5"
-                            : "border-gray-300 hover:border-primary"
+                        ? "border-primary bg-primary/5"
+                        : "border-gray-300 hover:border-primary"
                         }`}
                 >
                     <input {...getInputProps()} />
                     {uploadMutation.isPending ? (
                         <div className="flex flex-col items-center gap-3">
-                            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                            <div className="w-10 h-10 border-3 border-primary border-t-transparent rounded-full animate-spin" />
                             <p className="text-gray-700 font-medium">
-                                Processing receipt with AI…
+                                {progressMessage(elapsed)}
                             </p>
                             <p className="text-sm text-neutral">
-                                Extracting items automatically
+                                {elapsed}s elapsed — this typically takes 15–30 seconds
                             </p>
                         </div>
                     ) : (
@@ -98,7 +124,12 @@ export default function ReceiptsPage() {
 
             {uploadMutation.isError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
-                    Upload failed. Please try again with a clearer image.
+                    <p className="font-medium">Upload failed</p>
+                    <p className="mt-1">
+                        {(uploadMutation.error as any)?.response?.data?.detail
+                            || (uploadMutation.error as any)?.message
+                            || "Please try again with a clearer image."}
+                    </p>
                 </div>
             )}
 
@@ -115,6 +146,12 @@ export default function ReceiptsPage() {
                     onCancel={() => setPendingReceipt(null)}
                     isConfirming={confirmMutation.isPending}
                 />
+            )}
+
+            {confirmMutation.isError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
+                    Failed to save — {(confirmMutation.error as any)?.response?.data?.detail || "please try again."}
+                </div>
             )}
 
             {/* ─── Receipt History ─── */}
@@ -199,35 +236,41 @@ function ReviewPanel({
             {/* Merchant / Date / Total */}
             <div className="grid grid-cols-3 gap-3">
                 <div>
-                    <label className="text-xs font-medium text-gray-500 mb-1 block">
+                    <label htmlFor="receipt-store" className="text-xs font-medium text-gray-500 mb-1 block">
                         Store
                     </label>
                     <input
+                        id="receipt-store"
                         value={merchant}
                         onChange={(e) => setMerchant(e.target.value)}
+                        placeholder="Store name"
                         className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary"
                     />
                 </div>
                 <div>
-                    <label className="text-xs font-medium text-gray-500 mb-1 block">
+                    <label htmlFor="receipt-date" className="text-xs font-medium text-gray-500 mb-1 block">
                         Date
                     </label>
                     <input
+                        id="receipt-date"
                         type="date"
                         value={purchaseDate}
                         onChange={(e) => setPurchaseDate(e.target.value)}
+                        title="Purchase date"
                         className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary"
                     />
                 </div>
                 <div>
-                    <label className="text-xs font-medium text-gray-500 mb-1 block">
+                    <label htmlFor="receipt-total" className="text-xs font-medium text-gray-500 mb-1 block">
                         Total
                     </label>
                     <input
+                        id="receipt-total"
                         type="number"
                         step="0.01"
                         value={total}
                         onChange={(e) => setTotal(e.target.value)}
+                        placeholder="0.00"
                         className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary"
                     />
                 </div>
@@ -260,6 +303,7 @@ function ReviewPanel({
                                             updateItem(idx, "name", e.target.value)
                                         }
                                         placeholder="Item name"
+                                        aria-label="Item name"
                                         className="flex-1 border border-gray-200 rounded px-2 py-1 text-sm"
                                     />
                                     <input
@@ -273,6 +317,7 @@ function ReviewPanel({
                                                 parseFloat(e.target.value) || 0
                                             )
                                         }
+                                        aria-label="Item price"
                                         className="w-20 border border-gray-200 rounded px-2 py-1 text-sm"
                                     />
                                     <select
@@ -280,6 +325,7 @@ function ReviewPanel({
                                         onChange={(e) =>
                                             updateItem(idx, "category", e.target.value)
                                         }
+                                        aria-label="Item category"
                                         className="w-28 border border-gray-200 rounded px-2 py-1 text-xs"
                                     >
                                         {[
@@ -296,6 +342,7 @@ function ReviewPanel({
                                     <button
                                         onClick={() => setEditingIdx(null)}
                                         className="text-primary"
+                                        aria-label="Save item"
                                     >
                                         <Check size={14} />
                                     </button>
@@ -314,12 +361,14 @@ function ReviewPanel({
                                     <button
                                         onClick={() => setEditingIdx(idx)}
                                         className="text-neutral hover:text-primary"
+                                        aria-label="Edit item"
                                     >
                                         <Edit3 size={13} />
                                     </button>
                                     <button
                                         onClick={() => removeItem(idx)}
                                         className="text-neutral hover:text-red-500"
+                                        aria-label="Remove item"
                                     >
                                         <X size={13} />
                                     </button>
