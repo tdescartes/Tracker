@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { recipesApi } from "@/lib/api";
 import { Clock, CheckCircle2, XCircle, ChefHat, Search, RefreshCw } from "lucide-react";
 
 interface Recipe {
@@ -26,7 +26,7 @@ export default function RecipesPage() {
     const { data, isLoading, refetch } = useQuery({
         queryKey: ["recipe-suggestions", expiringFirst],
         queryFn: () =>
-            api.get(`/recipes/suggestions?limit=8&expiring_first=${expiringFirst}`).then((r) => r.data),
+            recipesApi.suggestions(expiringFirst, 8).then((r) => r.data),
         staleTime: 5 * 60 * 1000,
     });
 
@@ -35,7 +35,7 @@ export default function RecipesPage() {
         if (!searchQ.trim()) return;
         setSearching(true);
         try {
-            const res = await api.get(`/recipes/search?q=${encodeURIComponent(searchQ)}&limit=8`);
+            const res = await recipesApi.search(searchQ);
             setSearchResults(res.data.results);
         } finally {
             setSearching(false);
