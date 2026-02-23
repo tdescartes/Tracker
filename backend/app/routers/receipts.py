@@ -4,7 +4,7 @@ import os
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -17,12 +17,18 @@ from app.routers.auth import get_current_user
 from app.services.categorization_service import bulk_record_overrides, get_learned_mappings
 from app.config import settings
 
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+_limiter = Limiter(key_func=get_remote_address)
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.post("/upload", response_model=ReceiptOut, status_code=status.HTTP_201_CREATED)
+@_limiter.limit("5/minute")
 async def upload_receipt(
+    request: Request,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
