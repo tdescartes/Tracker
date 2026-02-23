@@ -96,8 +96,8 @@ export default function DashboardPage() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             {homeInsights.map((insight: any, i: number) => (
                                 <div key={i} className={`rounded-xl border p-4 ${insight.type === "warning" ? "bg-red-50 border-red-200" :
-                                        insight.type === "tip" ? "bg-blue-50 border-blue-200" :
-                                            "bg-gray-50 border-gray-200"
+                                    insight.type === "tip" ? "bg-blue-50 border-blue-200" :
+                                        "bg-gray-50 border-gray-200"
                                     }`}>
                                     <div className="flex items-center gap-2 mb-1">
                                         <Lightbulb size={14} className={
