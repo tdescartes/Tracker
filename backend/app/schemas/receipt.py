@@ -39,10 +39,47 @@ class ReceiptConfirm(BaseModel):
 class BudgetSummaryOut(BaseModel):
     month: str          # "2026-02"
     total_spent: Decimal
+    confirmed_spent: Decimal       # From scanned receipts
+    estimated_spent: Decimal       # From unmatched bank transactions
     budget_limit: Decimal
     remaining: Decimal
     by_category: dict[str, Decimal]  # {"Produce": 45.00, "Snacks": 22.50}
+    bank_category_breakdown: dict[str, Decimal] = {}  # From bank transactions
     waste_cost: Decimal              # Total value of trashed items
+    daily_pace: Decimal = Decimal("0")     # avg spent per day so far
+    on_track: bool = True                  # pace * days_in_month <= limit
+
+
+class ReportCardOut(BaseModel):
+    month: str
+    income: Decimal
+    expenses: Decimal
+    net: Decimal
+    vs_last_month_expenses: Decimal       # delta in $
+    vs_last_month_pct: Decimal            # delta in %
+    biggest_increase_category: str | None = None
+    biggest_increase_amount: Decimal = Decimal("0")
+    category_breakdown: dict[str, Decimal]
+    subscriptions: list[dict]             # [{description, amount, months_seen}]
+    subscription_monthly_total: Decimal
+    subscription_annual_total: Decimal
+    surplus: Decimal
+
+
+class SurplusOut(BaseModel):
+    month: str
+    income: Decimal
+    total_expenses: Decimal
+    surplus: Decimal
+    top_cuttable: list[dict]  # [{category, amount, pct_of_expenses}]
+
+
+class InsightOut(BaseModel):
+    screen: str    # home | budget | pantry | goals
+    type: str      # info | warning | tip
+    title: str
+    body: str
+    priority: int = 0
 
 
 class GoalCreate(BaseModel):
