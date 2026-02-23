@@ -3,12 +3,12 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Install system deps for Tesseract (Phase 2 OCR fallback)
+# System deps for PaddleOCR (primary OCR) + libpq for asyncpg
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    tesseract-ocr \
-    tesseract-ocr-eng \
     libpq-dev \
     gcc \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -20,10 +20,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy Tesseract from builder
-COPY --from=builder /usr/bin/tesseract /usr/bin/tesseract
-COPY --from=builder /usr/share/tesseract-ocr /usr/share/tesseract-ocr
-COPY --from=builder /usr/lib /usr/lib
+# Runtime deps for PaddleOCR (OpenCV needs libgl + libglib)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
@@ -41,8 +43,8 @@ USER tracker
 
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/')" || exit 1
+# Health check — uses /api/health which also verifies DB
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')" || exit 1
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
