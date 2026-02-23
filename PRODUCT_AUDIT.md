@@ -1,343 +1,402 @@
-# Tracker — Product Audit (Revised)
+# Tracker — Product Documentation
 
-> **Date**: June 2025 (Revision 2)  
-> **Scope**: Full-stack deep audit — backend services + routers (FastAPI), web frontend (Next.js 15), mobile (Expo SDK 54), database (PostgreSQL 16)  
-> **Focus**: Backend service quality, AI pipeline reliability, web frontend completeness
-
----
-
-## How I Approached This (Revision 2)
-
-This is a **complete re-audit from scratch**, not a diff from the previous one. I re-read every file line-by-line.
-
-1. **Read every backend service** — `ai_document_service.py`, `ocr_service.py`, `receipt_parser.py`, `bank_parser.py`, `categorization_service.py`, `recipe_service.py`, `financial_calculator.py`, `calc.py`, `notification_service.py`, `plaid_service.py`.
-2. **Read every backend router** — `auth.py`, `bank.py`, `budget.py`, `goals.py`, `notifications.py`, `pantry.py`, `plaid.py`, `receipts.py`, `recipes.py`, `settings.py`, `ws.py`.
-3. **Read every model, schema, and config file** — all ORM models, Pydantic schemas, `config.py`, `main.py`, `database.py`.
-4. **Read every web frontend page** — dashboard, bank, receipts, budget, goals, pantry, shopping, recipes, settings, layout — plus `api.ts`, `authStore.ts`, `useHouseholdSync.ts`.
-5. **Compared `ai_document_service.py` against `fix/main.py`** — the proven reference implementation of PaddleOCR + Gemini with a self-correction retry loop. Identified every gap between the production code and what actually works.
-6. **Traced each API call from frontend to backend** — verified every `api.get()` / `api.post()` call maps to a real route and returns what the frontend expects.
-7. **Identified dead code, redundant files, and missed integration points.**
+> **Last Updated**: February 22, 2026  
+> **Stack**: FastAPI + PostgreSQL | Next.js 15 | Expo SDK 54  
+> **Status**: Functional MVP — all core flows working
 
 ---
 
-## What Changed Since Audit v1
+## What Is Tracker?
 
-The following items from the original audit have been **resolved**:
+Tracker connects your grocery spending to what's actually in your kitchen. Scan a receipt, and the app tracks your food, tells you what to cook before things expire, shows where your money goes, and nudges you when you're about to waste something.
 
-| #   | Original Issue                                                               | Status                                         |
-| --- | ---------------------------------------------------------------------------- | ---------------------------------------------- |
-| 1   | `recipes.py` SQL used wrong column names (`expiry_date`, `added_by_user_id`) | ✅ Fixed                                       |
-| 2   | Notification bell path missing `/api` prefix                                 | ✅ Fixed                                       |
-| 3   | `docker-compose.yml` used "homebase" naming                                  | ✅ Fixed (now `tracker_*`)                     |
-| 4   | `hb_token` localStorage key                                                  | ✅ Renamed to `tracker_token`                  |
-| 5   | No manual pantry add form                                                    | ✅ Built (web pantry page)                     |
-| 6   | No shopping list on web                                                      | ✅ Built (`/dashboard/shopping`)               |
-| 7   | No receipt history page                                                      | ✅ Built (`/dashboard/receipts`)               |
-| 8   | No pantry item edit form                                                     | ✅ Built (EditItemModal on pantry page)        |
-| 9   | Budget limit not persisted                                                   | ✅ Persisted on `Household.budget_limit`       |
-| 10  | No household invite system                                                   | ✅ Built (invite codes in settings)            |
-| 11  | No settings / profile page                                                   | ✅ Built (`/dashboard/settings`)               |
-| 12  | No pantry item delete                                                        | ✅ Built (delete button on pantry cards)       |
-| 13  | No PATCH endpoint for goals                                                  | ✅ Built (goals CRUD complete)                 |
-| 14  | No data export                                                               | ✅ Built (CSV export in settings)              |
-| 15  | `insight_cut_amount` was hardcoded $50                                       | ✅ Now dynamic (15% of contribution, $25–$200) |
-| 16  | CORS origin hardcoded                                                        | ✅ Now from `FRONTEND_ORIGIN` env var          |
-
-**That was good progress.** Now here is what still needs attention.
+**One sentence**: The app that makes your grocery spending feel obvious.
 
 ---
 
-## 1. Backend Services — Deep Findings
+## User Stories
 
-### 1.1 CRITICAL — `ai_document_service.py` Missing Self-Correction Retry Loop
+### As a new user, I can...
 
-**What the working reference does** (`fix/main.py`):
+1. **Register and create a household** — email/password, household name
+2. **Invite family members** — generate an invite code, share it, they join
+3. **Set a monthly grocery budget** — stored on the household, shared by all members
 
-```python
-# SELF-CORRECTION LOOP — 3 retries with error feedback
-for attempt in range(max_retries):
-    try:
-        response = model.generate_content(current_prompt)
-        data = json.loads(cleaned_response)
-        return data
-    except json.JSONDecodeError as e:
-        current_prompt = f"""
-        Previous output was invalid JSON. Error: {e}
-        Incorrect Output: {cleaned_response}
-        Fix the syntax and return ONLY the valid JSON object.
-        """
+### As a daily user, I can...
+
+4. **Scan a grocery receipt** — take a photo or pick from gallery, AI extracts items + prices
+5. **Review and confirm items** — edit names/prices/categories before saving to pantry
+6. **See a post-scan budget nudge** — "$X added to pantry. Groceries this month: $Y / $Z. You're on pace."
+7. **Check my dashboard** — see what's expiring, budget health, recipe suggestion, weekly summary
+8. **View my pantry** — filter by location (fridge/freezer/pantry), see expiry dates, swipe to mark used/trashed
+9. **Get recipe suggestions** — based on what's in my pantry, prioritizing expiring items
+10. **Add items manually** — bottom sheet form for items not from receipts
+
+### As a budget-conscious user, I can...
+
+11. **Upload a bank statement** — PDF, CSV, or photo. AI parses transactions
+12. **See a report card after upload** — income, expenses, net, vs last month, surplus
+13. **View honest budget breakdown** — confirmed (receipt) vs estimated (bank-only) spending
+14. **Track spending by category** — see where money goes with visual breakdowns
+15. **Set savings goals** — target amount, monthly contribution, deadline, loan scenarios
+16. **Move surplus to goals** — one-tap "Move $X → Goal" when there's leftover budget
+17. **See detected subscriptions** — auto-flagged recurring charges from bank data
+18. **Track price inflation** — search any item, see price history over time
+
+### As someone who wants advice, I can...
+
+19. **Ask the AI assistant anything** — floating chat on every screen, powered by Gemini with full household context
+20. **Get contextual nudges** — budget pace alerts, expiring item warnings, waste cost, surplus→goal suggestions
+21. **See insights on my dashboard** — color-coded cards: budget pace, category trends, expiry warnings
+
+### As a household manager, I can...
+
+22. **Edit profile and password** — in settings/profile
+23. **Manage household members** — see who's in the household, invite new members
+24. **Export data as CSV** — pantry items and bank transactions
+25. **Connect bank via Plaid** — auto-sync transactions (sandbox mode)
+26. **Reconcile receipts with bank transactions** — match scanned receipts to bank charges
+
+---
+
+## User Timeline — How Someone Approaches Tracker
+
+```
+Day 1: Sign up → Scan first receipt → "Oh cool, it pulled out all my items"
+       → Confirm to pantry → See budget nudge
+
+Day 2: Open app → Dashboard says "Milk expires tomorrow"
+       → Tap recipe suggestion → Cook it → Mark milk as "Used"
+
+Day 3: Upload bank statement (PDF from email)
+       → See report card: "You earned $3,200, spent $2,800, net +$400"
+       → Check budget breakdown: "Groceries $340 / $600 — on track"
+
+Week 2: Create a savings goal: "Vacation: $2,000"
+        → Dashboard shows surplus: "$400 available"
+        → One tap: "Move $200 → Vacation"
+
+Week 3: Ask AI: "Can I afford to eat out this weekend?"
+        → AI: "You've spent $420 of $600 with 10 days left.
+           You're $15 over pace. Maybe cook with what's expiring instead."
+
+Month 2: App feels natural. Scan receipts, check expiry, cook recipes.
+         Budget nudges keep spending in check. Goals track progress.
+         Household members collaborate on shared pantry + shopping list.
 ```
 
-**What production does** (`ai_document_service.py`):
+---
 
-````python
-text = response.text.replace("```json", "").replace("```", "").strip()
-try:
-    return json.loads(text)
-except json.JSONDecodeError:
-    logger.error("Gemini returned invalid JSON: %s", text[:500])
-    raise ValueError("AI returned unparseable response")  # ← GIVES UP IMMEDIATELY
-````
+## Feature Map — What's Built
 
-**Impact**: When Gemini returns slightly malformed JSON (which happens ~15% of the time — trailing commas, markdown artifacts, truncated output), the production code fails the entire upload. The reference implementation recovers from this by feeding the error back to Gemini.
+### Fully Working
 
-**Fix**: Port the self-correction loop from `fix/main.py` into `structure_with_gemini()`.
+| Feature | Web | Mobile | Backend |
+|---------|-----|--------|---------|
+| Auth (register, login, JWT) | ✅ | ✅ | ✅ |
+| Receipt scan (OCR + AI parsing) | ✅ | ✅ | ✅ |
+| Receipt confirm → pantry | ✅ | ✅ | ✅ |
+| Post-confirm budget nudge | ✅ | ✅ | ✅ |
+| Pantry list + filters | ✅ | ✅ | ✅ |
+| Pantry add/edit/delete | ✅ | ✅ | ✅ |
+| Expiring items tracking | ✅ | ✅ | ✅ |
+| Shopping list (auto + manual) | ✅ | ✅ | ✅ |
+| Budget summary (honest split) | ✅ | ✅ | ✅ |
+| Bank statement upload + parse | ✅ | ✅ | ✅ |
+| Post-upload report card | ✅ | ✅ | ✅ |
+| Bank transactions list | ✅ | ✅ | ✅ |
+| Receipt ↔ bank reconciliation | ✅ | ✅ | ✅ |
+| Unmatched tx banner | ✅ | ✅ | ✅ |
+| Savings goals CRUD | ✅ | ✅ | ✅ |
+| Surplus → goal one-tap | ✅ | ✅ | ✅ |
+| Recipe suggestions | ✅ | ✅ | ✅ |
+| Recipe search | ✅ | ✅ | ✅ |
+| Price inflation tracker | ✅ | ✅ | ✅ |
+| Contextual insights/nudges | ✅ | ✅ | ✅ |
+| Floating AI chat assistant | ✅ | ✅ | ✅ |
+| Smart dashboard (4 cards) | ✅ | ✅ | ✅ |
+| Notifications (bell + list) | ✅ | ✅ | ✅ |
+| Push notification registration | — | ✅ | ✅ |
+| WebSocket real-time sync | ✅ | ✅ | ✅ |
+| Settings (profile, password) | ✅ | ✅ | ✅ |
+| Household (name, budget, invite) | ✅ | ✅ | ✅ |
+| Member management | ✅ | ✅ | ✅ |
+| CSV data export | ✅ | ✅ | ✅ |
+| Plaid bank linking | ✅ | ✅ | ✅ |
+
+### Navigation Structure
+
+**Web sidebar (6 items):** Home, Pantry, Money, Receipts, Recipes, Settings
+
+**Mobile tab bar (4 tabs + FAB):** Home, Pantry, Money, Profile — center FAB for Scan
 
 ---
 
-### 1.2 HIGH — Gemini Model Recreated On Every Call
+## What Was Just Fixed (Revision 4)
 
-```python
-async def structure_with_gemini(raw_text, doc_type, ...):
-    genai.configure(api_key=settings.GEMINI_API_KEY)          # re-runs every call
-    model = genai.GenerativeModel(settings.GEMINI_API_MODEL)  # new object every call
+### AI Chat Assistant — 5 Bugs Fixed
+
+The floating AI chat button was present on both web and mobile but **crashed on every request**. Root causes:
+
+| Bug | What Was Wrong | Fix |
+|-----|---------------|-----|
+| 1 | Used `PantryStatus.ACTIVE` — doesn't exist (enum: UNOPENED, OPENED, CONSUMED, TRASHED) | Changed to `PantryItem.status.in_([UNOPENED, OPENED])` |
+| 2 | Used `PantryItem.expiry_date` — column is `expiration_date` | Fixed column name |
+| 3 | Hardcoded model `"gemini-2.0-flash"` instead of `settings.GEMINI_API_MODEL` | Now uses config value |
+| 4 | Created separate rate limiter instance causing routing conflicts | Removed private limiter, uses app's global 200/min |
+| 5 | Suggestion chips only filled input without sending | Web: `handleSend(q)` auto-sends. Mobile already correct |
+
+**Also improved:**
+- Gemini model initialized as lazy singleton (one instance reused, not recreated per request)
+- Household budget limit included in AI context (AI can now answer "am I on track?")
+
+---
+
+## Honest Feature Assessment
+
+### Complete & Polished
+
+- **Receipt → Pantry → Recipe pipeline** — the core loop works end-to-end with budget context after each scan
+- **Bank → Budget → Goals pipeline** — upload, report card, honest budget split, surplus routing to goals
+- **Smart dashboard** — Action Needed, Budget Pulse, Tonight's Pick, This Week cards
+- **Mobile interactions** — swipe gestures, haptic feedback, bottom sheets, toast notifications, skeleton screens
+
+### Working But Could Be Better
+
+| Feature | Issue | Impact |
+|---------|-------|--------|
+| **Onboarding** | First-time user sees empty states with basic text. No guided walkthrough | Users may not know what to do first |
+| **Receipt editing** | Can edit items before confirm, but no way to add missed items | If OCR misses an item, user can't add it in review |
+| **Recipes** | Suggestions are based on pantry ingredients but source is Spoonacular API or hardcoded fallback | Quality depends on API key being set |
+| **Plaid** | Sandbox mode only. No production bank linking | Users can't auto-sync real bank data yet |
+| **Web push notifications** | Backend sends push tokens but web doesn't register for them | Web users don't get push alerts |
+| **Orphaned web pages** | `/dashboard/goals`, `/dashboard/budget`, `/dashboard/bank` still exist but are not in sidebar | Dead routes that duplicate content in `/dashboard/money` |
+
+### Not Built Yet
+
+| Feature | Why It Matters |
+|---------|---------------|
+| **Dark mode** | Common expectation, especially for kitchen/nighttime use |
+| **Offline support** | App doesn't work without internet — problem for in-store use |
+| **Multi-currency** | `currency_code` field exists on Household model but nothing uses it |
+| **Receipt photo in history** | Receipt list shows date/store/total but not the original image |
+| **Barcode scanning** | Could auto-identify products and pre-fill categories/shelf life |
+| **Household activity feed** | WebSocket exists but no visible feed of "Sarah added 6 items from Costco" |
+| **Custom categories** | Category overrides table exists in DB but no UI to manage them |
+| **Weekly/monthly email digest** | No scheduled summary emails. Backend scheduler exists but only does expiry checks |
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────┐    ┌──────────────┐    ┌──────────────┐
+│   Next.js    │    │  Expo/React  │    │    Plaid     │
+│   Web App    │    │  Native App  │    │   Sandbox    │
+└──────┬───────┘    └──────┬───────┘    └──────┬───────┘
+       │                   │                   │
+       └──────────┬────────┴───────────────────┘
+                  │
+           ┌──────▼───────┐
+           │   FastAPI     │
+           │   Backend     │
+           │               │
+           │  13 Routers   │
+           │  8 Services   │
+           │  4 Models     │
+           └──────┬────────┘
+                  │
+        ┌─────────┼─────────┐
+        │         │         │
+   ┌────▼───┐ ┌──▼────┐ ┌──▼─────┐
+   │ Postgres│ │Gemini │ │Paddle  │
+   │   DB    │ │  AI   │ │  OCR   │
+   └─────────┘ └───────┘ └────────┘
 ```
 
-The PaddleOCR engine is properly initialized as a singleton in `ocr_service.py`. The Gemini model should follow the same pattern — configure once at module load, reuse the instance.
+### Backend (38 API Endpoints)
 
-**Fix**: Initialize `genai` and the model once at module level (lazy singleton).
+| Router | Endpoints | Purpose |
+|--------|-----------|---------|
+| `auth.py` | 3 | Register, login, get current user |
+| `receipts.py` | 3 | Upload (OCR+AI), confirm→pantry, list |
+| `pantry.py` | 6 | List, add, edit, delete, expiring, shopping list |
+| `budget.py` | 4 | Summary, report card, surplus, inflation |
+| `bank.py` | 3 | Upload statement, list transactions, reconcile |
+| `goals.py` | 4 | List, create, update, delete |
+| `recipes.py` | 2 | Suggestions, search |
+| `insights.py` | 1 | Contextual nudges (6 generators) |
+| `chat.py` | 1 | AI chat with household context |
+| `notifications.py` | 5 | List, mark read, mark all, register/unregister token |
+| `plaid.py` | 5 | Link token, exchange, linked items, sync, unlink |
+| `settings.py` | 8 | Profile, password, household, invite, join, members, 2 exports |
+| `ws.py` | 1 | WebSocket for real-time household sync |
+
+### Services
+
+| Service | Purpose |
+|---------|---------|
+| `ai_document_service.py` | PaddleOCR + Gemini pipeline with self-correction retry |
+| `ocr_service.py` | PaddleOCR singleton for text extraction |
+| `receipt_parser.py` | Parse structured receipt data, default shelf life |
+| `bank_parser.py` | Parse bank statement transactions |
+| `categorization_service.py` | Auto-categorize items with learning overrides |
+| `recipe_service.py` | Recipe suggestions from pantry ingredients |
+| `financial_calculator.py` | Goal projections, loan vs cash analysis |
+| `notification_service.py` | Push notifications, expiry alerts |
+| `plaid_service.py` | Plaid API integration for bank linking |
+
+### Database (PostgreSQL 18)
+
+| Table | Purpose |
+|-------|---------|
+| `households` | Household with budget_limit, currency, invite_code |
+| `users` | User accounts linked to households |
+| `receipts` | Scanned receipt metadata |
+| `pantry_items` | Food items with expiry, price, location, status |
+| `financial_goals` | Savings goals with loan scenario support |
+| `bank_transactions` | Parsed bank transactions with subscription flags |
+| `product_catalog` | Shared product database (grows with usage) |
+| `notifications` | Push notification queue |
+| `category_overrides` | User-specific category corrections |
+| `plaid_items` | Linked Plaid bank connections |
+| `document_processing_log` | AI processing audit trail |
 
 ---
 
-### 1.3 HIGH — `process_document_auto()` Does Double OCR
+## Environment Setup
 
-```python
-async def process_document_auto(file_path):
-    raw_text = await extract_text_from_file_async(file_path)  # ← OCR here
-    doc_type = classify_document(raw_text)
-    if doc_type == "bank_statement":
-        result = await process_bank_document(file_path)       # ← OCR AGAIN inside
-    else:
-        result = await process_receipt_document(file_path)    # ← OCR AGAIN inside
+### Required
+
+```env
+DATABASE_URL=postgresql+asyncpg://tracker_user:password@localhost:5432/tracker_db
+SECRET_KEY=your-jwt-secret
+GEMINI_API_KEY=your-google-ai-key
 ```
 
-Each sub-function calls `extract_text_from_file_async()` again. For a scanned image that takes 3–5 seconds per OCR pass, this doubles processing time.
+### Optional
 
-**Fix**: Extract text once, pass `raw_text` to the sub-functions.
-
----
-
-### 1.4 HIGH — `calc.py` Is Dead Code (Duplicate)
-
-Two files implement the exact same `calculate_goal()` function:
-
-- `financial_calculator.py` (77 lines) — the **active** version, imported by `goals.py`
-- `calc.py` (66 lines) — **never imported anywhere**, older version with hardcoded `cut_amount=50.0`
-
-**Fix**: Delete `calc.py`.
-
----
-
-### 1.5 MEDIUM — `document_processing_log` Table Never Written To
-
-Migration 003 created a `document_processing_log` table with columns for tracking processing attempts, methods, durations, and confidence scores. But no backend service or router writes to it.
-
-**Fix**: Add logging to `process_receipt_document()` and `process_bank_document()` — record each document processed, method used, success/failure, and duration.
-
----
-
-### 1.6 MEDIUM — `DEFAULT_SHELF_LIFE` Defined But Never Used
-
-`receipt_parser.py` defines:
-
-```python
-DEFAULT_SHELF_LIFE = {
-    "Dairy": 7, "Produce": 5, "Bakery": 3, "Meat": 4,
-    "Seafood": 2, "Deli": 5, "Frozen": 90, ...
-}
+```env
+GEMINI_API_MODEL=gemini-3-flash-preview   # default in config
+SPOONACULAR_API_KEY=                       # for recipe suggestions
+PLAID_CLIENT_ID=                           # for bank linking
+PLAID_SECRET=
+FRONTEND_ORIGIN=http://localhost:3000
+MOBILE_ORIGIN=http://localhost:8081
 ```
 
-But this is never called to auto-populate `expiration_date` when items are added to the pantry. Users must manually enter expiration dates for every item.
+### Running Locally
 
-**Fix**: Use `DEFAULT_SHELF_LIFE` in the receipt confirm flow to auto-calculate expiration dates for items that don't have one.
+```bash
+# Backend
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload
 
----
+# Web
+cd web
+npm install
+npm run dev
 
-### 1.7 MEDIUM — `categorization_service.py` and `plaid.py` Use Raw SQL Instead of ORM
-
-- `categorization_service.py` uses `text()` SQL for the `category_overrides` table — no SQLAlchemy model exists.
-- `plaid.py` uses `text()` SQL for the `plaid_items` table — no SQLAlchemy model exists.
-
-This is fragile: schema changes require hunting through service files and routers instead of updating a model in one place.
-
-**Fix**: Create ORM models for `CategoryOverride` and `PlaidItem`, then convert raw SQL to ORM queries.
-
----
-
-### 1.8 LOW — Redundant Double-Commit Pattern in `database.py`
-
-```python
-async def get_db():
-    async with async_session() as session:
-        try:
-            yield session
-            await session.commit()   # ← auto-commit on success
-        except:
-            await session.rollback()
-            raise
+# Mobile
+cd mobile
+npm install
+npx expo start
 ```
 
-Routers also call explicit `await db.commit()` before returning. This means every successful request commits twice. Not broken, but wasteful.
+### Docker
 
-**Fix**: Remove explicit `db.commit()` calls from routers — let `get_db()` handle it.
-
----
-
-## 2. Web Frontend — Deep Findings
-
-### 2.1 HIGH — Recipes Page Uses Raw `api.get()` Instead of Typed Helpers
-
-`recipes/page.tsx`:
-
-```tsx
-api.get(`/recipes/suggestions?limit=8&expiring_first=${expiringFirst}`);
-api.get(`/recipes/search?q=${encodeURIComponent(searchQ)}&limit=8`);
+```bash
+docker-compose up --build
 ```
 
-Every other page uses typed API helpers (`bankApi.transactions()`, `goalsApi.list()`, etc.). The recipes page bypasses the `recipesApi` object defined in `api.ts`, making it inconsistent and harder to maintain.
+---
 
-**Fix**: Use `recipesApi.suggestions()` and `recipesApi.search()` from `api.ts`.
+## UX Design Principles
+
+1. **The app should talk first.** Every screen leads with a sentence that tells the user something they didn't know. Not "here are your pantry items" — rather "You have 3 items expiring tomorrow."
+
+2. **One primary action per screen.** Home = "Scan a receipt." Pantry = "What should I cook?" Money = "Am I on track?"
+
+3. **Proactive > Reactive.** Expiring items appear on home. Budget warnings appear when you scan a receipt. Recipe ideas appear when you open the pantry.
+
+4. **Mobile-first interactions.** Camera scan is one tap (FAB). Swipe gestures for quick actions. Haptic feedback. Bottom sheets instead of full pages.
+
+5. **Reduce navigation depth.** 4 tabs + FAB, not 9. Organized around moments ("what should I cook?"), not database tables ("goals tab").
 
 ---
 
-### 2.2 HIGH — Settings Profile/Household Sections Set State During Render
+## Screen-by-Screen Walkthrough
 
-```tsx
-function ProfileSection() {
-  const [initialized, setInitialized] = useState(false);
-  if (profile && !initialized) {
-    setName(profile.full_name || ""); // ← setState during render
-    setEmail(profile.email || "");
-    setInitialized(true);
-  }
-}
-```
+### Home (Dashboard)
 
-This is a React anti-pattern that triggers extra re-renders. The same pattern appears in `HouseholdSection`.
+Smart daily briefing with 4 cards:
+- **Action Needed** — expiring items + recipe suggestion (only shows when relevant)
+- **Budget Pulse** — spending vs limit with pace indicator
+- **Tonight's Pick** — single recipe recommendation from expiring ingredients
+- **This Week** — receipts scanned, items used, waste cost, savings progress
+- **Contextual Insights** — AI-generated nudges (budget pace, category trends, waste alerts)
 
-**Fix**: Use `useEffect` to initialize form state when profile data loads.
+### Pantry
 
----
+Living inventory with two modes:
+- **In Stock** — all active items, grouped by expiry urgency, filterable by location
+- **Shopping List** — auto-populated when items are consumed/trashed, plus manual adds
+- Swipe left = Used (green), swipe right = Trash (red)
+- Long press → Edit, Move, Shopping List, Delete
+- [+] button → bottom sheet add form
+- Expiring items pinned to top
 
-### 2.3 MEDIUM — No Error Feedback on Upload Failures
+### Money (Budget + Transactions + Goals)
 
-Receipt upload (`receipts/page.tsx`) and bank statement upload (`bank/page.tsx`) use try/catch but don't show any user-visible error when the upload or AI parsing fails. The UI just silently stops the spinner.
+Three segments in one tab:
+- **Budget** — honest confirmed/estimated split, pace indicator, category breakdown, subscription detection
+- **Transactions** — bank statement upload, transaction list with filters, matched/unmatched indicators
+- **Goals** — CRUD with loan vs cash analysis, surplus routing, progress bars
 
-**Fix**: Add error state with a visible error banner that tells the user what went wrong (e.g., "Could not parse this receipt — try a clearer photo").
+### Scan (FAB)
 
----
+Center floating action button on every screen:
+- Opens camera immediately
+- AI extracts items via PaddleOCR + Gemini
+- Review screen: edit merchant, date, prices, categories
+- Confirm → items go to pantry → budget nudge appears
+- Return to previous screen
 
-### 2.4 MEDIUM — Bank Page Missing Filter State in Transactions Query
+### Recipes
 
-The bank page has type/category filter dropdowns but they only filter the already-fetched transactions client-side. If there are thousands of transactions, this loads them all into memory.
+Recipe suggestions based on pantry contents:
+- Prioritizes recipes using expiring items
+- Search by ingredient or dish name
+- Shows how many ingredients you have vs need
+- "Add missing to shopping list" action
 
-**Current**: Acceptable for now (most users have < 500 transactions), but noted for future pagination.
+### Profile/Settings
 
----
+Everything about "me and my household":
+- Profile (name, email) + password change
+- Household (name, budget limit, currency)
+- Invite members (generate code) + join (enter code)
+- Member list
+- CSV export (pantry, transactions)
+- Notification preferences
+- Sign out
 
-### 2.5 MEDIUM — Missing Migration 003 in Docker Init Scripts
+### AI Chat (Floating)
 
-`docker-compose.yml` mounts migrations 001 and 002 into `/docker-entrypoint-initdb.d/`:
-
-```yaml
-- ./database/migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
-- ./database/migrations/002_phase2_3_schema.sql:/docker-entrypoint-initdb.d/02_phase2_3.sql
-```
-
-Migration 003 (which adds `source`, `plaid_transaction_id`, `subcategory` columns and creates `document_processing_log`) is not mounted. Docker deployments will be missing these schema changes.
-
-**Fix**: Add migration 003 to docker-compose init scripts.
-
----
-
-### 2.6 LOW — No Loading State on Data Export Buttons
-
-The settings page export buttons (`ExportSection`) call async functions but show no spinner or disabled state while the CSV is being generated.
-
-**Fix**: Add pending state to export buttons.
-
----
-
-### 2.7 LOW — Missing Gemini Env Vars in Docker Compose
-
-The docker-compose backend environment doesn't pass through `GEMINI_API_KEY` or `GEMINI_API_MODEL`, so AI document processing won't work in Docker deployments.
-
-**Fix**: Add Gemini env vars to docker-compose.
-
----
-
-## 3. Backend ↔ Frontend Feature Parity (Updated)
-
-| Backend Feature            | API Route                          | Web | Mobile                |
-| -------------------------- | ---------------------------------- | --- | --------------------- |
-| Register                   | `POST /api/auth/register`          | ✅  | ✅                    |
-| Login                      | `POST /api/auth/login`             | ✅  | ✅                    |
-| Get current user           | `GET /api/auth/me`                 | ✅  | ✅                    |
-| Upload receipt (OCR)       | `POST /api/receipts/upload`        | ✅  | ✅                    |
-| Confirm receipt → pantry   | `POST /api/receipts/{id}/confirm`  | ✅  | ✅                    |
-| List receipts              | `GET /api/receipts/`               | ✅  | ❌                    |
-| List pantry items          | `GET /api/pantry/`                 | ✅  | ✅                    |
-| Add pantry item            | `POST /api/pantry/`                | ✅  | ❌                    |
-| Edit pantry item           | `PATCH /api/pantry/{id}`           | ✅  | Partial (status only) |
-| Delete pantry item         | `DELETE /api/pantry/{id}`          | ✅  | ❌                    |
-| Expiring soon              | `GET /api/pantry/expiring-soon`    | ✅  | ✅                    |
-| Shopping list              | `GET /api/pantry/shopping-list`    | ✅  | ✅                    |
-| Budget summary             | `GET /api/budget/summary/{y}/{m}`  | ✅  | ✅ (home only)        |
-| Inflation tracker          | `GET /api/budget/inflation/{item}` | ✅  | ❌                    |
-| Goal CRUD                  | `/api/goals/`                      | ✅  | ❌                    |
-| Bank upload                | `POST /api/bank/upload-statement`  | ✅  | ❌                    |
-| Bank transactions          | `GET /api/bank/transactions`       | ✅  | ❌                    |
-| Bank reconcile             | `POST /api/bank/reconcile`         | ✅  | ❌                    |
-| Recipe suggestions         | `GET /api/recipes/suggestions`     | ✅  | ✅                    |
-| Recipe search              | `GET /api/recipes/search`          | ✅  | ❌                    |
-| Plaid link / sync / unlink | `/api/plaid/*`                     | ✅  | ❌                    |
-| Notifications list         | `GET /api/notifications/`          | ✅  | ❌                    |
-| Push token register        | `POST /api/notifications/token`    | ❌  | ✅                    |
-| WebSocket sync             | `WS /api/ws/{household_id}`        | ✅  | ❌                    |
-| Profile settings           | `/api/settings/profile`            | ✅  | ❌                    |
-| Household settings         | `/api/settings/household`          | ✅  | ❌                    |
-| Invite / Join              | `/api/settings/household/*`        | ✅  | ❌                    |
-| Data export                | `/api/settings/export/*`           | ✅  | ❌                    |
-
-**Web: ~95% coverage** (missing only web push registration).  
-**Mobile: ~35% coverage** — missing goals, bank, full budget, settings, notifications list, recipe search, data export, Plaid, WebSocket.
+Bottom-right button on every dashboard screen:
+- Opens a chat panel with message history
+- Suggestion chips for quick questions
+- Powered by Gemini with full household context (pantry, budget, goals, waste, subscriptions)
+- 2-4 sentence concise, actionable responses
 
 ---
 
-## 4. Implementation Plan
+## Revision History
 
-Here is exactly what I will implement, in order, without changing any existing styles or layout design:
-
-### Phase A — Backend Service Hardening (6 changes)
-
-| #   | Change                         | File(s)                                    | What I Will Do                                                                                                                                  |
-| --- | ------------------------------ | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| A1  | Self-correction retry loop     | `ai_document_service.py`                   | Port the 3-retry JSON correction loop from `fix/main.py` into `structure_with_gemini()` — feed JSON errors back to Gemini for self-correction   |
-| A2  | Gemini model singleton         | `ai_document_service.py`                   | Initialize `genai.configure()` and `GenerativeModel` once at module level via lazy singleton, same pattern as PaddleOCR                         |
-| A3  | Fix double OCR                 | `ai_document_service.py`                   | Add `raw_text` parameter to `process_receipt_document()` and `process_bank_document()` so `process_document_auto()` can pass pre-extracted text |
-| A4  | Delete dead code               | `calc.py`                                  | Remove the file — it's an unused duplicate of `financial_calculator.py`                                                                         |
-| A5  | Auto-populate expiration dates | `routers/receipts.py`, `receipt_parser.py` | Use `DEFAULT_SHELF_LIFE` to calculate `expiration_date` for each item during receipt confirmation when no date is provided                      |
-| A6  | Remove redundant commits       | Multiple routers                           | Remove explicit `db.commit()` calls — `get_db()` already commits on success                                                                     |
-
-### Phase B — Frontend Cleanup (4 changes)
-
-| #   | Change                                | File(s)                              | What I Will Do                                                                                                              |
-| --- | ------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| B1  | Use typed API helpers on recipes page | `recipes/page.tsx`                   | Replace raw `api.get()` calls with `recipesApi.suggestions()` and `recipesApi.search()`                                     |
-| B2  | Fix settings render-time setState     | `settings/page.tsx`                  | Replace `if (profile && !initialized)` pattern with proper `useEffect` hook in both `ProfileSection` and `HouseholdSection` |
-| B3  | Add upload error feedback             | `receipts/page.tsx`, `bank/page.tsx` | Add error state + visible error banner when upload or AI parsing fails                                                      |
-| B4  | Add export loading states             | `settings/page.tsx`                  | Add pending/spinner state to export buttons                                                                                 |
-
-### Phase C — Infrastructure (3 changes)
-
-| #   | Change                         | File(s)                  | What I Will Do                                                            |
-| --- | ------------------------------ | ------------------------ | ------------------------------------------------------------------------- |
-| C1  | Mount migration 003 in Docker  | `docker-compose.yml`     | Add the third migration file to init scripts                              |
-| C2  | Pass Gemini env vars to Docker | `docker-compose.yml`     | Add `GEMINI_API_KEY` and `GEMINI_API_MODEL` to backend environment        |
-| C3  | Document processing log        | `ai_document_service.py` | Write to `document_processing_log` table after each AI processing attempt |
-
-**Total: 13 targeted changes. No layout or style modifications. No new pages or visual redesigns.**
-
----
-
-_End of audit._
+| Rev | Date | Summary |
+|-----|------|---------|
+| 1 | Feb 2026 | Initial audit — found 16 issues, all resolved |
+| 2 | Feb 2026 | Re-audit — identified 13 changes (Phases A-C) |
+| 3 | Feb 2026 | Full rebuild — Phases A-K (65 changes), 5 connected financial flows |
+| 4 | Feb 2026 | Fixed AI chat (5 bugs), user stories, timeline, honest feature assessment |
