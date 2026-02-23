@@ -36,20 +36,17 @@ services:
       DATABASE_URL: postgresql+asyncpg://tracker_user:${DB_PASSWORD:-tracker_secret}@db:5432/tracker_db
       SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+      MOBILE_ORIGIN: ${MOBILE_ORIGIN:-http://localhost:8081}
       USE_LOCAL_STORAGE: "true"
-      USE_TESSERACT: "true"
-      # Optional OCR/Plaid/Spoonacular — override in .env
-      VERYFI_CLIENT_ID: ${VERYFI_CLIENT_ID:-}
-      VERYFI_CLIENT_SECRET: ${VERYFI_CLIENT_SECRET:-}
-      VERYFI_USERNAME: ${VERYFI_USERNAME:-}
-      VERYFI_API_KEY: ${VERYFI_API_KEY:-}
-      GOOGLE_CLOUD_VISION_API_KEY: ${GOOGLE_CLOUD_VISION_API_KEY:-}
+      USE_PADDLEOCR: "true"
+      # AI / LLM
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_API_MODEL: ${GEMINI_API_MODEL:-gemini-2.0-flash}
+      # External integrations — override in .env
       SPOONACULAR_API_KEY: ${SPOONACULAR_API_KEY:-}
       PLAID_CLIENT_ID: ${PLAID_CLIENT_ID:-}
       PLAID_SECRET: ${PLAID_SECRET:-}
       PLAID_ENV: ${PLAID_ENV:-sandbox}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_API_MODEL: ${GEMINI_API_MODEL:-gemini-2.0-flash}
     volumes:
       - uploads_data:/app/uploads
     ports:
@@ -57,16 +54,23 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
     healthcheck:
       test:
         [
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8000/')",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')",
         ]
       interval: 30s
       timeout: 10s
+      start_period: 30s
       retries: 3
 
   # ─────────────────────────────────────────
