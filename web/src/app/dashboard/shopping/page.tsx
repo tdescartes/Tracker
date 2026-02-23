@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { pantryApi } from "@/lib/api";
 import { ShoppingCart, CheckCircle2, Trash2 } from "lucide-react";
+import { ShoppingSkeleton } from "@/components/Skeleton";
 
 export default function ShoppingPage() {
     const qc = useQueryClient();
@@ -35,7 +36,7 @@ export default function ShoppingPage() {
             </div>
 
             {isLoading ? (
-                <div className="text-center py-16 text-neutral">Loading…</div>
+                <ShoppingSkeleton />
             ) : items.length === 0 ? (
                 <div className="text-center py-16 text-neutral">
                     <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-30" />
