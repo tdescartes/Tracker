@@ -7,6 +7,7 @@ import { useAuthStore } from "@/store/authStore";
 import {
     User, Users, Shield, Download, Copy, Check, Plus, RefreshCw,
 } from "lucide-react";
+import { ProfileSkeleton, MembersSkeleton } from "@/components/Skeleton";
 
 export default function SettingsPage() {
     return (
@@ -53,7 +54,7 @@ function ProfileSection() {
                 <h2 className="text-base font-semibold">Profile</h2>
             </div>
             {isLoading ? (
-                <p className="text-sm text-neutral">Loading…</p>
+                <ProfileSkeleton />
             ) : (
                 <form
                     onSubmit={(e) => { e.preventDefault(); update.mutate(); }}
@@ -281,7 +282,7 @@ function MembersSection() {
                 <h2 className="text-base font-semibold">Household Members</h2>
             </div>
             {isLoading ? (
-                <p className="text-sm text-neutral">Loading…</p>
+                <MembersSkeleton />
             ) : members.length === 0 ? (
                 <p className="text-sm text-neutral">No members found.</p>
             ) : (
