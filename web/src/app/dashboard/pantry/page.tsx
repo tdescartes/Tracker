@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { pantryApi, receiptApi } from "@/lib/api";
 import { format } from "date-fns";
 import { Upload, Plus, CheckCircle2, Trash2, Package, Pencil, X, ShoppingCart } from "lucide-react";
+import { PantrySkeleton } from "@/components/Skeleton";
 
 type Status = "UNOPENED" | "OPENED" | "CONSUMED" | "TRASHED";
 type Location = "ALL" | "FRIDGE" | "FREEZER" | "PANTRY";
@@ -276,7 +277,7 @@ export default function PantryPage() {
 
             {/* Items Grid */}
             {isLoading ? (
-                <div className="text-center py-16 text-neutral">Loading…</div>
+                <PantrySkeleton />
             ) : items.length === 0 ? (
                 <div className="text-center py-16 text-neutral">
                     <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
