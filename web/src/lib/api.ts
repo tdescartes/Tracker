@@ -64,6 +64,16 @@ export const budgetApi = {
     summary: (year: number, month: number, limit?: number) =>
         api.get(`/api/budget/summary/${year}/${month}`, { params: { budget_limit: limit } }),
     inflation: (itemName: string) => api.get(`/api/budget/inflation/${itemName}`),
+    reportCard: (year: number, month: number) => api.get(`/api/budget/report-card/${year}/${month}`),
+    surplus: (year: number, month: number) => api.get(`/api/budget/surplus/${year}/${month}`),
+};
+
+export const insightsApi = {
+    list: () => api.get("/api/insights/"),
+};
+
+export const chatApi = {
+    send: (message: string) => api.post("/api/chat/", { message }),
 };
 
 export const bankApi = {
