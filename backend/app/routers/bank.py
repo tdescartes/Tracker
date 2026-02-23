@@ -4,7 +4,7 @@ import os
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
@@ -16,6 +16,10 @@ from app.routers.auth import get_current_user
 from datetime import date as date_type, datetime
 from app.services.bank_parser import parse_bank_file
 from app.config import settings
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+_limiter = Limiter(key_func=get_remote_address)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -36,7 +40,9 @@ def get_subscription_keywords() -> list[str]:
 
 
 @router.post("/upload-statement", status_code=status.HTTP_201_CREATED)
+@_limiter.limit("5/minute")
 async def upload_statement(
+    request: Request,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
