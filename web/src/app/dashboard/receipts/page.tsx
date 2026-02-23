@@ -2,11 +2,13 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { receiptApi } from "@/lib/api";
+import { receiptApi, budgetApi, insightsApi } from "@/lib/api";
 import { useDropzone } from "react-dropzone";
 import {
     FileText, UploadCloud, ChevronDown, ChevronUp, Check, X, Edit3, Camera,
+    Sparkles, ArrowRight, TrendingUp,
 } from "lucide-react";
+import { ReceiptsSkeleton } from "@/components/Skeleton";
 
 /* ─── Elapsed-time hook for long-running operations ─── */
 function useElapsedSeconds(running: boolean) {
@@ -35,6 +37,10 @@ function progressMessage(seconds: number): string {
 export default function ReceiptsPage() {
     const qc = useQueryClient();
     const [pendingReceipt, setPendingReceipt] = useState<any>(null);
+    const [postConfirmNudge, setPostConfirmNudge] = useState<{
+        itemCount: number; total: string; budgetSpent?: string; budgetLimit?: string;
+        onTrack?: boolean; insight?: string;
+    } | null>(null);
 
     const { data: receipts = [], isLoading } = useQuery({
         queryKey: ["receipts"],
@@ -51,10 +57,31 @@ export default function ReceiptsPage() {
     const confirmMutation = useMutation({
         mutationFn: ({ id, payload }: { id: string; payload: any }) =>
             receiptApi.confirm(id, payload).then((r) => r.data),
-        onSuccess: () => {
+        onSuccess: async (_data, variables) => {
+            const itemCount = variables.payload.items?.length || 0;
+            const total = variables.payload.total_amount || "0";
             setPendingReceipt(null);
             qc.invalidateQueries({ queryKey: ["receipts"] });
             qc.invalidateQueries({ queryKey: ["pantry"] });
+            qc.invalidateQueries({ queryKey: ["budget"] });
+
+            // Fetch budget context + insight for the nudge card
+            const now = new Date();
+            const nudge: typeof postConfirmNudge = { itemCount, total: String(total) };
+            try {
+                const [budgetRes, insightRes] = await Promise.all([
+                    budgetApi.summary(now.getFullYear(), now.getMonth() + 1).then((r) => r.data),
+                    insightsApi.list().then((r) => r.data),
+                ]);
+                nudge.budgetSpent = budgetRes.total_spent;
+                nudge.budgetLimit = budgetRes.budget_limit;
+                nudge.onTrack = budgetRes.on_track;
+                const receiptInsight = insightRes.find((i: any) =>
+                    i.screen === "budget" || i.type === "budget_pace" || i.type === "category_change"
+                );
+                if (receiptInsight) nudge.insight = receiptInsight.body;
+            } catch { /* budget/insight fetch is best-effort */ }
+            setPostConfirmNudge(nudge);
         },
     });
 
@@ -154,9 +181,56 @@ export default function ReceiptsPage() {
                 </div>
             )}
 
+            {/* ─── Post-Confirm Nudge Card ─── */}
+            {postConfirmNudge && (
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-5 space-y-3 animate-in slide-in-from-bottom-2">
+                    <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                                <Check size={16} className="text-green-600" />
+                            </div>
+                            <div>
+                                <p className="font-semibold text-green-800">
+                                    ${parseFloat(postConfirmNudge.total).toFixed(2)} added to your pantry
+                                </p>
+                                <p className="text-sm text-green-600">
+                                    {postConfirmNudge.itemCount} item{postConfirmNudge.itemCount !== 1 ? "s" : ""} saved with expiry tracking
+                                </p>
+                            </div>
+                        </div>
+                        <button onClick={() => setPostConfirmNudge(null)} className="text-green-400 hover:text-green-600">
+                            <X size={16} />
+                        </button>
+                    </div>
+                    {postConfirmNudge.budgetSpent && postConfirmNudge.budgetLimit && (
+                        <div className="flex items-center gap-3 bg-white/60 rounded-lg px-4 py-3">
+                            <TrendingUp size={16} className={postConfirmNudge.onTrack ? "text-green-600" : "text-orange-500"} />
+                            <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-800">
+                                    Groceries this month: ${parseFloat(postConfirmNudge.budgetSpent).toFixed(2)}
+                                    <span className="text-gray-500"> / ${parseFloat(postConfirmNudge.budgetLimit).toFixed(2)}</span>
+                                </p>
+                                <p className={`text-xs ${postConfirmNudge.onTrack ? "text-green-600" : "text-orange-600"}`}>
+                                    {postConfirmNudge.onTrack ? "You're on pace — good." : "Spending is above pace this month."}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                    {postConfirmNudge.insight && (
+                        <div className="flex items-start gap-2 bg-white/60 rounded-lg px-4 py-3">
+                            <Sparkles size={14} className="text-primary mt-0.5 flex-shrink-0" />
+                            <p className="text-sm text-gray-700">{postConfirmNudge.insight}</p>
+                        </div>
+                    )}
+                    <a href="/dashboard/pantry" className="inline-flex items-center gap-1 text-sm text-primary font-medium hover:underline">
+                        View pantry <ArrowRight size={14} />
+                    </a>
+                </div>
+            )}
+
             {/* ─── Receipt History ─── */}
             {isLoading ? (
-                <div className="text-center py-16 text-neutral">Loading…</div>
+                <ReceiptsSkeleton />
             ) : receipts.length === 0 && !pendingReceipt ? (
                 <div className="text-center py-16 text-neutral">
                     <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
