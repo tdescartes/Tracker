@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import { Slot } from "expo-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import Toast from "react-native-toast-message";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import { enableScreens } from "react-native-screens";
@@ -53,9 +55,12 @@ async function registerForPushNotifications(): Promise<string | null> {
 
 export default function RootLayout() {
     return (
-        <QueryClientProvider client={queryClient}>
-            <RootNavigator />
-        </QueryClientProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+            <QueryClientProvider client={queryClient}>
+                <RootNavigator />
+                <Toast />
+            </QueryClientProvider>
+        </GestureHandlerRootView>
     );
 }
 
