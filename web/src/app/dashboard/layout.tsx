@@ -5,23 +5,21 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { api, chatApi } from "@/lib/api";
 import { useHouseholdSync } from "@/hooks/useHouseholdSync";
 import {
     LayoutDashboard, Package, Wallet, Target, FileText, LogOut, Home,
     ChefHat, Bell, CheckCheck, X, ShoppingCart, Receipt, Settings,
+    MessageCircle, Send, Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
 
 const NAV = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/dashboard/pantry", label: "Pantry", icon: Package },
-    { href: "/dashboard/shopping", label: "Shopping", icon: ShoppingCart },
-    { href: "/dashboard/budget", label: "Budget", icon: Wallet },
-    { href: "/dashboard/goals", label: "Goals", icon: Target },
+    { href: "/dashboard/money", label: "Money", icon: Wallet },
     { href: "/dashboard/recipes", label: "Recipes", icon: ChefHat },
     { href: "/dashboard/receipts", label: "Receipts", icon: Receipt },
-    { href: "/dashboard/bank", label: "Bank", icon: FileText },
     { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
@@ -84,7 +82,7 @@ function NotificationBell() {
                                     <CheckCheck size={12} /> Mark all read
                                 </button>
                             )}
-                            <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600">
+                            <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600" title="Close notifications">
                                 <X size={14} />
                             </button>
                         </div>
@@ -188,6 +186,137 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <main className="flex-1 overflow-y-auto p-8">
                     {children}
                 </main>
+            </div>
+
+            {/* Floating AI chat button — visible on every dashboard page */}
+            <FloatingChat />
+        </div>
+    );
+}
+
+
+/* ─── Floating AI Chat Button ─── */
+function FloatingChat() {
+    const [open, setOpen] = useState(false);
+    const [messages, setMessages] = useState<{ role: "user" | "ai"; text: string }[]>([]);
+    const [input, setInput] = useState("");
+    const [sending, setSending] = useState(false);
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }, [messages]);
+
+    const handleSend = async (directMsg?: string) => {
+        const msg = (directMsg ?? input).trim();
+        if (!msg || sending) return;
+        setInput("");
+        setMessages((prev) => [...prev, { role: "user", text: msg }]);
+        setSending(true);
+        try {
+            const { data } = await chatApi.send(msg);
+            setMessages((prev) => [...prev, { role: "ai", text: data.reply }]);
+        } catch {
+            setMessages((prev) => [...prev, { role: "ai", text: "Sorry, I couldn't process that. Please try again." }]);
+        } finally {
+            setSending(false);
+        }
+    };
+
+    if (!open) {
+        return (
+            <button
+                onClick={() => setOpen(true)}
+                className="fixed bottom-6 right-6 w-14 h-14 bg-primary text-white rounded-full shadow-lg hover:bg-primary/90 transition flex items-center justify-center z-50 group"
+                title="Ask me anything about your spending, pantry, or goals"
+            >
+                <MessageCircle size={24} />
+                <span className="absolute bottom-full mb-2 right-0 bg-gray-900 text-white text-xs px-3 py-1.5 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none">
+                    Ask me anything
+                </span>
+            </button>
+        );
+    }
+
+    return (
+        <div className="fixed bottom-6 right-6 w-96 h-[480px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col z-50 overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 bg-primary text-white shrink-0">
+                <div className="flex items-center gap-2">
+                    <Sparkles size={16} />
+                    <span className="font-semibold text-sm">AI Assistant</span>
+                </div>
+                <button onClick={() => setOpen(false)} className="hover:bg-white/20 rounded p-1 transition" aria-label="Close chat">
+                    <X size={16} />
+                </button>
+            </div>
+
+            {/* Messages */}
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+                {messages.length === 0 && (
+                    <div className="text-center text-neutral text-sm py-8">
+                        <Sparkles size={24} className="mx-auto mb-2 text-primary/40" />
+                        <p className="font-medium text-gray-700">Ask me anything</p>
+                        <p className="text-xs mt-1 text-gray-400">
+                            About your spending, pantry, or goals
+                        </p>
+                        <div className="flex flex-wrap gap-2 justify-center mt-4">
+                            {["How much did I spend this month?", "What's expiring soon?", "Can I afford a vacation?"].map((q) => (
+                                <button
+                                    key={q}
+                                    onClick={() => handleSend(q)}
+                                    className="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded-full hover:bg-primary/10 hover:text-primary transition"
+                                >
+                                    {q}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                {messages.map((m, i) => (
+                    <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                        <div className={clsx(
+                            "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm",
+                            m.role === "user"
+                                ? "bg-primary text-white rounded-br-sm"
+                                : "bg-gray-100 text-gray-800 rounded-bl-sm"
+                        )}>
+                            {m.text}
+                        </div>
+                    </div>
+                ))}
+                {sending && (
+                    <div className="flex justify-start">
+                        <div className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-2.5">
+                            <div className="flex gap-1">
+                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Input */}
+            <div className="p-3 border-t border-gray-100 shrink-0">
+                <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex items-center gap-2">
+                    <input
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        placeholder="Ask about spending, pantry, goals…"
+                        className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        disabled={sending}
+                    />
+                    <button
+                        type="submit"
+                        disabled={!input.trim() || sending}
+                        className="w-9 h-9 bg-primary text-white rounded-full flex items-center justify-center disabled:opacity-40 hover:bg-primary/90 transition"
+                        aria-label="Send message"
+                    >
+                        <Send size={14} />
+                    </button>
+                </form>
             </div>
         </div>
     );
