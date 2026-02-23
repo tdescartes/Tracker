@@ -5,11 +5,19 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import os
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 from app.config import settings
 from app.database import engine, Base
-from app.routers import auth, receipts, pantry, budget, goals, bank, recipes, notifications, plaid
+from app.routers import auth, receipts, pantry, budget, goals, bank, recipes, notifications, plaid, insights
 from app.routers import settings as settings_router
 from app.routers import ws as ws_router
+from app.routers import chat as chat_router
+
+# ── Rate limiter ──────────────────────────────────────────────
+limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 
 
 async def _run_expiry_check():
@@ -49,6 +57,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Attach rate limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS — allow the web and mobile frontends
 # In development, also allow any localhost port (e.g. Next.js dev server on :3000,
@@ -108,8 +120,26 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["Not
 app.include_router(plaid.router,         prefix="/api/plaid",         tags=["Plaid"])
 app.include_router(settings_router.router, prefix="/api/settings",     tags=["Settings"])
 app.include_router(ws_router.router,     prefix="/api/ws",            tags=["WebSocket"])
+app.include_router(insights.router,      prefix="/api/insights",      tags=["Insights"])
+app.include_router(chat_router.router,   prefix="/api/chat",          tags=["Chat"])
 
 
 @app.get("/", tags=["Health"])
 async def root():
     return {"status": "ok", "app": settings.APP_NAME}
+
+
+@app.get("/api/health", tags=["Health"])
+async def health_check():
+    """Readiness probe — confirms app + DB are reachable."""
+    from app.database import AsyncSessionLocal
+    from sqlalchemy import text
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        return {"status": "healthy", "db": "connected"}
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "db": str(e)},
+        )
