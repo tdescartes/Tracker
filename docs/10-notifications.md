@@ -7,6 +7,7 @@
 **Subheadline**: Automatic expiry alerts sent to every household member's phone. In-app notifications keep a persistent feed of what needs attention — from expiring items to budget milestones.
 
 **Bullets**:
+
 - **Expiry push notifications** — Daily at 8 AM, the system checks for pantry items expiring within 3 days and pushes alerts to every registered device via Expo Push
 - **In-app notification feed** — A persistent, always-available feed of events with unread count badge, one-tap mark-as-read, and deep links to relevant screens
 - **Household-wide delivery** — One person's expiring item triggers notifications for the whole household. Everyone stays informed
@@ -75,37 +76,37 @@ Token validation: Only tokens starting with `ExponentPushToken[` are sent. Inval
 
 ### Push Token Management
 
-| Operation | Behavior |
-|-----------|----------|
-| Register | Upsert — if token exists, update user_id and platform |
-| Unregister | Delete token record (called on logout) |
-| Multi-device | One user can have multiple tokens (phone + tablet) |
-| Multi-user | All household members receive the same expiry alerts |
+| Operation    | Behavior                                              |
+| ------------ | ----------------------------------------------------- |
+| Register     | Upsert — if token exists, update user_id and platform |
+| Unregister   | Delete token record (called on logout)                |
+| Multi-device | One user can have multiple tokens (phone + tablet)    |
+| Multi-user   | All household members receive the same expiry alerts  |
 
 ### Data Model
 
 **PushNotificationToken**:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | UUID | Primary key |
-| `user_id` | UUID | FK → users |
-| `token` | VARCHAR(255) | Expo push token string |
-| `platform` | VARCHAR(10) | "expo" or "web" |
-| `created_at` | TIMESTAMP | Auto-set |
+| Field        | Type         | Description            |
+| ------------ | ------------ | ---------------------- |
+| `id`         | UUID         | Primary key            |
+| `user_id`    | UUID         | FK → users             |
+| `token`      | VARCHAR(255) | Expo push token string |
+| `platform`   | VARCHAR(10)  | "expo" or "web"        |
+| `created_at` | TIMESTAMP    | Auto-set               |
 
 **Notification** (in-app):
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | UUID | Primary key |
-| `user_id` | UUID | FK → users |
-| `title` | VARCHAR(255) | Notification headline |
-| `body` | TEXT | Notification message |
-| `type` | VARCHAR(50) | info, warning, success, alert |
-| `is_read` | BOOLEAN | Default false |
-| `meta` | JSONB | Optional metadata (deep link info) |
-| `created_at` | TIMESTAMP | Auto-set |
+| Field        | Type         | Description                        |
+| ------------ | ------------ | ---------------------------------- |
+| `id`         | UUID         | Primary key                        |
+| `user_id`    | UUID         | FK → users                         |
+| `title`      | VARCHAR(255) | Notification headline              |
+| `body`       | TEXT         | Notification message               |
+| `type`       | VARCHAR(50)  | info, warning, success, alert      |
+| `is_read`    | BOOLEAN      | Default false                      |
+| `meta`       | JSONB        | Optional metadata (deep link info) |
+| `created_at` | TIMESTAMP    | Auto-set                           |
 
 ### In-App Notification Feed
 
@@ -116,24 +117,26 @@ Token validation: Only tokens starting with `ExponentPushToken[` are sent. Inval
 
 ### Type-Based Styling
 
-| Type | Icon | Color |
-|------|------|-------|
+| Type      | Icon             | Color     |
+| --------- | ---------------- | --------- |
 | `warning` | ⚠️ AlertTriangle | Red/Amber |
-| `info` | 💡 Lightbulb | Blue |
-| `success` | ✅ CheckCircle | Green |
-| `alert` | 🔔 Bell | Orange |
+| `info`    | 💡 Lightbulb     | Blue      |
+| `success` | ✅ CheckCircle   | Green     |
+| `alert`   | 🔔 Bell          | Orange    |
 
 ---
 
 ## Platform Behavior
 
 ### Web
+
 - **Bell icon** in dashboard header with unread count badge
 - **Dropdown feed**: Click bell → scrollable notification list
 - **Mark read**: Click individual notification or "Mark all read" button
 - **No push**: Web push not implemented (Expo tokens only)
 
 ### Mobile
+
 - **Push notifications**: Received natively via Expo Notifications
 - **Deep linking**: Notification `data.screen` field navigates to relevant tab
 - **Badge count**: App icon badge updated with unread count
@@ -144,18 +147,19 @@ Token validation: Only tokens starting with `ExponentPushToken[` are sent. Inval
 
 ## API Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/notifications/token` | Register push token (upsert) |
-| DELETE | `/api/notifications/token` | Unregister push token |
-| GET | `/api/notifications/` | List notifications (most recent 50) |
-| POST | `/api/notifications/{id}/read` | Mark one notification as read |
-| POST | `/api/notifications/read-all` | Mark all as read |
-| POST | `/api/notifications/trigger-expiry` | Manually trigger expiry check |
+| Method | Path                                | Description                         |
+| ------ | ----------------------------------- | ----------------------------------- |
+| POST   | `/api/notifications/token`          | Register push token (upsert)        |
+| DELETE | `/api/notifications/token`          | Unregister push token               |
+| GET    | `/api/notifications/`               | List notifications (most recent 50) |
+| POST   | `/api/notifications/{id}/read`      | Mark one notification as read       |
+| POST   | `/api/notifications/read-all`       | Mark all as read                    |
+| POST   | `/api/notifications/trigger-expiry` | Manually trigger expiry check       |
 
 ### Trigger Endpoint
 
 The `/trigger-expiry` endpoint is designed for:
+
 - **Cron job**: APScheduler calls daily at 8:00 AM
 - **Manual testing**: Any authenticated user can trigger
 - **Custom window**: `days_ahead` param (default 3) controls lookahead
@@ -164,10 +168,10 @@ The `/trigger-expiry` endpoint is designed for:
 
 ## Connected Features
 
-| Trigger | Effect |
-|---------|--------|
-| Pantry item approaching expiry | Push notification to all household devices |
-| Notification received on mobile | Deep link to pantry with expiring filter |
-| Unread notifications exist | Badge count on dashboard bell icon |
-| Item consumed/trashed | Stops appearing in next expiry check |
-| New household member joins | Their token registered → they get alerts too |
+| Trigger                         | Effect                                       |
+| ------------------------------- | -------------------------------------------- |
+| Pantry item approaching expiry  | Push notification to all household devices   |
+| Notification received on mobile | Deep link to pantry with expiring filter     |
+| Unread notifications exist      | Badge count on dashboard bell icon           |
+| Item consumed/trashed           | Stops appearing in next expiry check         |
+| New household member joins      | Their token registered → they get alerts too |
