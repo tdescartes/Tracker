@@ -8,6 +8,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { budgetApi, bankApi, goalsApi, insightsApi } from "../../src/lib/api";
+import { BudgetSkeleton, TransactionsSkeleton as TxSkeleton, GoalsSkeleton } from "../../src/components/Skeleton";
 import * as Haptics from "expo-haptics";
 
 // ── Segment selector ─────────────────────────────────────────
@@ -97,7 +98,7 @@ function BudgetSegment() {
                 <TouchableOpacity onPress={goForward}><Text style={s.arrow}>▶</Text></TouchableOpacity>
             </View>
 
-            {isLoading ? <ActivityIndicator color="#006994" style={{ marginTop: 40 }} /> : (
+            {isLoading ? <BudgetSkeleton /> : (
                 <>
                     {/* Spending Card */}
                     <View style={s.card}>
@@ -318,7 +319,7 @@ function TransactionsSegment() {
         queryFn: () => budgetApi.reportCard(now.getFullYear(), now.getMonth() + 1).then((r) => r.data),
     });
 
-    const { data: transactions = [], refetch } = useQuery({
+    const { data: transactions = [], refetch, isLoading: txLoading } = useQuery({
         queryKey: ["bank-transactions"],
         queryFn: () => bankApi.transactions().then((r) => r.data),
     });
@@ -388,6 +389,10 @@ function TransactionsSegment() {
         >
             {/* Upload */}
             <Text style={s.sectionTitle}>Upload Statement</Text>
+
+            {/* Initial loading skeleton */}
+            {txLoading && transactions.length === 0 && !uploading && <TxSkeleton />}
+
             {uploading ? (
                 <View style={s.uploadBox}>
                     <ActivityIndicator size="large" color="#006994" />
@@ -712,7 +717,7 @@ function GoalsSegment() {
                 </View>
             )}
 
-            {isLoading ? <ActivityIndicator color="#006994" style={{ marginTop: 40 }} /> :
+            {isLoading ? <GoalsSkeleton /> :
                 goals.length === 0 ? (
                     <View style={s.emptyState}>
                         <Text style={s.emptyIcon}>🎯</Text>
