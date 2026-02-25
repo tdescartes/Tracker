@@ -11,6 +11,7 @@ import * as Haptics from "expo-haptics";
 import Toast from "react-native-toast-message";
 import { settingsApi, notificationsApi } from "../../src/lib/api";
 import { useAuthStore } from "../../src/store/authStore";
+import { ProfileSkeleton } from "../../src/components/Skeleton";
 
 export default function ProfileScreen() {
     const qc = useQueryClient();
@@ -24,12 +25,12 @@ export default function ProfileScreen() {
         queryFn: () => settingsApi.getProfile().then((r) => r.data),
     });
 
-    const { data: members = [] } = useQuery({
+    const { data: members = [], isLoading: membersLoading } = useQuery({
         queryKey: ["household-members"],
         queryFn: () => settingsApi.listMembers().then((r) => r.data),
     });
 
-    const { data: notifData } = useQuery({
+    const { data: notifData, isLoading: notifsLoading } = useQuery({
         queryKey: ["notifications"],
         queryFn: () => notificationsApi.list().then((r) => r.data),
         refetchInterval: 60_000,
@@ -58,90 +59,94 @@ export default function ProfileScreen() {
     const typeIcon = (type: string) =>
         type === "alert" ? "🔴" : type === "warning" ? "🟡" : type === "success" ? "🟢" : "🔵";
 
+    const isInitialLoading = profileLoading && !profile;
+
     return (
         <ScrollView style={s.screen} contentContainerStyle={s.container}>
-            {/* User header */}
-            <View style={s.header}>
-                <View style={s.avatar}>
-                    <Text style={s.avatarText}>
-                        {(user?.full_name || user?.email || "?").charAt(0).toUpperCase()}
-                    </Text>
+            {isInitialLoading ? <ProfileSkeleton /> : <>
+                {/* User header */}
+                <View style={s.header}>
+                    <View style={s.avatar}>
+                        <Text style={s.avatarText}>
+                            {(user?.full_name || user?.email || "?").charAt(0).toUpperCase()}
+                        </Text>
+                    </View>
+                    <View>
+                        <Text style={s.name}>{user?.full_name || "User"}</Text>
+                        <Text style={s.email}>{user?.email}</Text>
+                    </View>
                 </View>
-                <View>
-                    <Text style={s.name}>{user?.full_name || "User"}</Text>
-                    <Text style={s.email}>{user?.email}</Text>
-                </View>
-            </View>
 
-            {/* Menu sections */}
-            <SectionButton
-                icon="👤" label="Edit Profile" active={section === "profile"}
-                onPress={() => setSection(section === "profile" ? null : "profile")}
-            />
-            {section === "profile" && <EditProfileSection onDone={() => setSection(null)} />}
+                {/* Menu sections */}
+                <SectionButton
+                    icon="👤" label="Edit Profile" active={section === "profile"}
+                    onPress={() => setSection(section === "profile" ? null : "profile")}
+                />
+                {section === "profile" && <EditProfileSection onDone={() => setSection(null)} />}
 
-            <SectionButton
-                icon="🔑" label="Change Password" active={section === "password"}
-                onPress={() => setSection(section === "password" ? null : "password")}
-            />
-            {section === "password" && <ChangePasswordSection onDone={() => setSection(null)} />}
+                <SectionButton
+                    icon="🔑" label="Change Password" active={section === "password"}
+                    onPress={() => setSection(section === "password" ? null : "password")}
+                />
+                {section === "password" && <ChangePasswordSection onDone={() => setSection(null)} />}
 
-            <SectionButton
-                icon="🏠" label="Household" active={section === "household"}
-                onPress={() => setSection(section === "household" ? null : "household")}
-            />
-            {section === "household" && (
-                <HouseholdSection profile={profile} members={members} />
-            )}
+                <SectionButton
+                    icon="🏠" label="Household" active={section === "household"}
+                    onPress={() => setSection(section === "household" ? null : "household")}
+                />
+                {section === "household" && (
+                    <HouseholdSection profile={profile} members={members} />
+                )}
 
-            <SectionButton
-                icon="🔔" label={`Notifications${unreadCount > 0 ? ` (${unreadCount})` : ""}`}
-                active={section === "notifications"}
-                onPress={() => setSection(section === "notifications" ? null : "notifications")}
-                badge={unreadCount}
-            />
-            {section === "notifications" && (
-                <View style={s.sectionCard}>
-                    {unreadCount > 0 && (
-                        <TouchableOpacity style={s.markAllBtn} onPress={() => markAll.mutate()}>
-                            <Text style={s.markAllText}>Mark all as read</Text>
-                        </TouchableOpacity>
-                    )}
-                    {notifications.length === 0 ? (
-                        <Text style={s.emptyText}>All caught up!</Text>
-                    ) : (
-                        notifications.slice(0, 20).map((n: any) => (
-                            <TouchableOpacity
-                                key={n.id}
-                                onPress={() => !n.is_read && markOne.mutate(n.id)}
-                                style={[s.notifRow, !n.is_read && s.unread]}
-                            >
-                                <Text style={s.notifIcon}>{typeIcon(n.type)}</Text>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={s.notifTitle}>{n.title}</Text>
-                                    <Text style={s.notifBody}>{n.body}</Text>
-                                    <Text style={s.notifDate}>
-                                        {new Date(n.created_at).toLocaleDateString("en-US", {
-                                            month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-                                        })}
-                                    </Text>
-                                </View>
+                <SectionButton
+                    icon="🔔" label={`Notifications${unreadCount > 0 ? ` (${unreadCount})` : ""}`}
+                    active={section === "notifications"}
+                    onPress={() => setSection(section === "notifications" ? null : "notifications")}
+                    badge={unreadCount}
+                />
+                {section === "notifications" && (
+                    <View style={s.sectionCard}>
+                        {unreadCount > 0 && (
+                            <TouchableOpacity style={s.markAllBtn} onPress={() => markAll.mutate()}>
+                                <Text style={s.markAllText}>Mark all as read</Text>
                             </TouchableOpacity>
-                        ))
-                    )}
-                </View>
-            )}
+                        )}
+                        {notifications.length === 0 ? (
+                            <Text style={s.emptyText}>All caught up!</Text>
+                        ) : (
+                            notifications.slice(0, 20).map((n: any) => (
+                                <TouchableOpacity
+                                    key={n.id}
+                                    onPress={() => !n.is_read && markOne.mutate(n.id)}
+                                    style={[s.notifRow, !n.is_read && s.unread]}
+                                >
+                                    <Text style={s.notifIcon}>{typeIcon(n.type)}</Text>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={s.notifTitle}>{n.title}</Text>
+                                        <Text style={s.notifBody}>{n.body}</Text>
+                                        <Text style={s.notifDate}>
+                                            {new Date(n.created_at).toLocaleDateString("en-US", {
+                                                month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                                            })}
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                            ))
+                        )}
+                    </View>
+                )}
 
-            <SectionButton
-                icon="📤" label="Export Data" active={section === "export"}
-                onPress={() => setSection(section === "export" ? null : "export")}
-            />
-            {section === "export" && <ExportSection />}
+                <SectionButton
+                    icon="📤" label="Export Data" active={section === "export"}
+                    onPress={() => setSection(section === "export" ? null : "export")}
+                />
+                {section === "export" && <ExportSection />}
 
-            {/* Sign out */}
-            <TouchableOpacity style={s.logoutBtn} onPress={handleLogout}>
-                <Text style={s.logoutText}>Sign Out</Text>
-            </TouchableOpacity>
+                {/* Sign out */}
+                <TouchableOpacity style={s.logoutBtn} onPress={handleLogout}>
+                    <Text style={s.logoutText}>Sign Out</Text>
+                </TouchableOpacity>
+            </>}
         </ScrollView>
     );
 }
