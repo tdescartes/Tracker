@@ -1,6 +1,7 @@
 import { ScrollView, View, Text, StyleSheet, TouchableOpacity, RefreshControl } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { pantryApi, budgetApi, recipesApi, notificationsApi, insightsApi } from "../../src/lib/api";
+import { HomeSkeleton } from "../../src/components/Skeleton";
 import { useAuthStore } from "../../src/store/authStore";
 import { useRouter } from "expo-router";
 import { format } from "date-fns";
@@ -13,12 +14,12 @@ export default function HomeScreen() {
     const now = new Date();
     const [refreshing, setRefreshing] = useState(false);
 
-    const { data: expiring = [] } = useQuery({
+    const { data: expiring = [], isLoading: expiringLoading } = useQuery({
         queryKey: ["expiring"],
         queryFn: () => pantryApi.expiringSoon(3).then((r) => r.data),
     });
 
-    const { data: budget } = useQuery({
+    const { data: budget, isLoading: budgetLoading } = useQuery({
         queryKey: ["budget", now.getFullYear(), now.getMonth() + 1],
         queryFn: () => budgetApi.summary(now.getFullYear(), now.getMonth() + 1).then((r) => r.data),
     });
@@ -44,6 +45,8 @@ export default function HomeScreen() {
         queryFn: () => insightsApi.list().then((r) => r.data),
         staleTime: 60_000,
     });
+
+    const isLoading = expiringLoading || budgetLoading;
 
     const homeInsights = (insightsData ?? []).filter((i: any) => i.screen === "home" || i.screen === "budget").slice(0, 3);
 
@@ -88,180 +91,184 @@ export default function HomeScreen() {
         >
             <Text style={s.greeting}>{greeting}{firstName ? `, ${firstName}` : ""}!</Text>
 
-            {/* ── Action Needed Card ──────────────────────────── */}
-            {actionCount > 0 && (
-                <TouchableOpacity
-                    style={s.actionCard}
-                    onPress={() => {
-                        if (expiring.length > 0) router.push("/(tabs)/pantry");
-                        else router.push("/(tabs)/profile");
-                    }}
-                >
-                    <View style={s.actionHeader}>
-                        <Text style={s.actionIcon}>⚡</Text>
-                        <Text style={s.actionTitle}>Action Needed</Text>
-                        <View style={s.actionBadge}>
-                            <Text style={s.actionBadgeText}>{actionCount}</Text>
-                        </View>
-                    </View>
-                    <View style={s.actionItems}>
-                        {expiring.length > 0 && (
-                            <Text style={s.actionItem}>
-                                🍎 {expiring.length} item{expiring.length !== 1 ? "s" : ""} expiring soon
-                            </Text>
-                        )}
-                        {shopping.length > 0 && (
-                            <Text style={s.actionItem}>
-                                🛒 {shopping.length} item{shopping.length !== 1 ? "s" : ""} on shopping list
-                            </Text>
-                        )}
-                        {unreadNotifs > 0 && (
-                            <Text style={s.actionItem}>
-                                🔔 {unreadNotifs} unread notification{unreadNotifs !== 1 ? "s" : ""}
-                            </Text>
-                        )}
-                    </View>
-                </TouchableOpacity>
-            )}
+            {isLoading && <HomeSkeleton />}
 
-            {/* ── Budget Pulse Card ──────────────────────────── */}
-            <TouchableOpacity style={s.budgetCard} onPress={() => router.push("/(tabs)/money")}>
-                <View style={s.budgetHeader}>
-                    <Text style={s.budgetTitle}>Budget Pulse</Text>
-                    <Text style={[s.budgetAmount, pct > 90 && { color: "#EC5800" }]}>
-                        {hasEstimated ? "~" : ""}${spent.toFixed(0)} / ${limit.toFixed(0)}
-                    </Text>
-                </View>
-                <View style={s.progressBg}>
-                    <View style={{ flexDirection: "row", height: 10 }}>
-                        <View style={[s.progressFill, {
-                            width: `${confirmedPct}%` as any,
-                            backgroundColor: pct > 90 ? "#EC5800" : pct > 70 ? "#f59e0b" : "#87A96B",
-                            borderTopLeftRadius: 5,
-                            borderBottomLeftRadius: 5,
-                        }]} />
-                        {hasEstimated && (
+            {!isLoading && <>
+                {/* ── Action Needed Card ──────────────────────────── */}
+                {actionCount > 0 && (
+                    <TouchableOpacity
+                        style={s.actionCard}
+                        onPress={() => {
+                            if (expiring.length > 0) router.push("/(tabs)/pantry");
+                            else router.push("/(tabs)/profile");
+                        }}
+                    >
+                        <View style={s.actionHeader}>
+                            <Text style={s.actionIcon}>⚡</Text>
+                            <Text style={s.actionTitle}>Action Needed</Text>
+                            <View style={s.actionBadge}>
+                                <Text style={s.actionBadgeText}>{actionCount}</Text>
+                            </View>
+                        </View>
+                        <View style={s.actionItems}>
+                            {expiring.length > 0 && (
+                                <Text style={s.actionItem}>
+                                    🍎 {expiring.length} item{expiring.length !== 1 ? "s" : ""} expiring soon
+                                </Text>
+                            )}
+                            {shopping.length > 0 && (
+                                <Text style={s.actionItem}>
+                                    🛒 {shopping.length} item{shopping.length !== 1 ? "s" : ""} on shopping list
+                                </Text>
+                            )}
+                            {unreadNotifs > 0 && (
+                                <Text style={s.actionItem}>
+                                    🔔 {unreadNotifs} unread notification{unreadNotifs !== 1 ? "s" : ""}
+                                </Text>
+                            )}
+                        </View>
+                    </TouchableOpacity>
+                )}
+
+                {/* ── Budget Pulse Card ──────────────────────────── */}
+                <TouchableOpacity style={s.budgetCard} onPress={() => router.push("/(tabs)/money")}>
+                    <View style={s.budgetHeader}>
+                        <Text style={s.budgetTitle}>Budget Pulse</Text>
+                        <Text style={[s.budgetAmount, pct > 90 && { color: "#EC5800" }]}>
+                            {hasEstimated ? "~" : ""}${spent.toFixed(0)} / ${limit.toFixed(0)}
+                        </Text>
+                    </View>
+                    <View style={s.progressBg}>
+                        <View style={{ flexDirection: "row", height: 10 }}>
                             <View style={[s.progressFill, {
-                                width: `${Math.min((estimated / limit) * 100, pct - confirmedPct)}%` as any,
-                                backgroundColor: pct > 90 ? "#EC580066" : pct > 70 ? "#f59e0b66" : "#87A96B66",
+                                width: `${confirmedPct}%` as any,
+                                backgroundColor: pct > 90 ? "#EC5800" : pct > 70 ? "#f59e0b" : "#87A96B",
+                                borderTopLeftRadius: 5,
+                                borderBottomLeftRadius: 5,
                             }]} />
-                        )}
-                    </View>
-                </View>
-                <View style={s.budgetMeta}>
-                    <Text style={s.budgetMetaText}>
-                        {!onTrack ? "⚠️ " : ""}{pct.toFixed(0)}% used · {daysLeft} days left
-                    </Text>
-                    <Text style={[s.paceText, !onTrack && { color: "#EC5800" }]}>
-                        {onTrack ? "✓" : "⚠"} ${dailyPace.toFixed(0)}/day
-                    </Text>
-                </View>
-                {hasEstimated && (
-                    <Text style={s.estimatedNote}>
-                        Confirmed: ${confirmed.toFixed(0)} · Estimated: ~${estimated.toFixed(0)}
-                    </Text>
-                )}
-                {dailyBudget > 0 && (
-                    <Text style={s.dailyBudget}>
-                        ${dailyBudget.toFixed(2)}/day remaining
-                    </Text>
-                )}
-            </TouchableOpacity>
-
-            {/* ── AI Insights ─────────────────────────────────── */}
-            {homeInsights.length > 0 && (
-                <View style={{ marginBottom: 12 }}>
-                    {homeInsights.map((insight: any, i: number) => (
-                        <View key={i} style={[s.insightCard, {
-                            backgroundColor: insight.type === "warning" ? "#fef2f2" : insight.type === "tip" ? "#eff6ff" : "#f9fafb",
-                            borderColor: insight.type === "warning" ? "#fecaca" : insight.type === "tip" ? "#bfdbfe" : "#e5e7eb",
-                        }]}>
-                            <Text style={s.insightTitle}>
-                                {insight.type === "warning" ? "⚠️" : insight.type === "tip" ? "💡" : "ℹ️"} {insight.title}
-                            </Text>
-                            <Text style={s.insightBody}>{insight.body}</Text>
+                            {hasEstimated && (
+                                <View style={[s.progressFill, {
+                                    width: `${Math.min((estimated / limit) * 100, pct - confirmedPct)}%` as any,
+                                    backgroundColor: pct > 90 ? "#EC580066" : pct > 70 ? "#f59e0b66" : "#87A96B66",
+                                }]} />
+                            )}
                         </View>
-                    ))}
-                </View>
-            )}
-
-            {/* ── Tonight's Pick Card ────────────────────────── */}
-            {topRecipe && (
-                <TouchableOpacity style={s.recipeCard} onPress={() => router.push("/(tabs)/recipes")}>
-                    <Text style={s.recipeLabel}>🍽 Tonight's Pick</Text>
-                    <Text style={s.recipeName}>{topRecipe.name}</Text>
-                    <View style={s.recipeMetaRow}>
-                        {topRecipe.time_minutes && (
-                            <Text style={s.recipeMeta}>⏱ {topRecipe.time_minutes} min</Text>
-                        )}
-                        <Text style={[s.recipeMeta, { color: "#87A96B" }]}>
-                            ✅ {topRecipe.matched_count}/{topRecipe.ingredients?.length ?? 0} in pantry
+                    </View>
+                    <View style={s.budgetMeta}>
+                        <Text style={s.budgetMetaText}>
+                            {!onTrack ? "⚠️ " : ""}{pct.toFixed(0)}% used · {daysLeft} days left
                         </Text>
-                        <Text style={[s.recipeMeta, { color: "#006994", fontWeight: "700" }]}>
-                            {topRecipe.match_score}% match
+                        <Text style={[s.paceText, !onTrack && { color: "#EC5800" }]}>
+                            {onTrack ? "✓" : "⚠"} ${dailyPace.toFixed(0)}/day
                         </Text>
                     </View>
-                    {topRecipe.missing?.length > 0 && (
-                        <View style={s.missingRow}>
-                            {topRecipe.missing.slice(0, 3).map((m: string) => (
-                                <View key={m} style={s.missingBadge}>
-                                    <Text style={s.missingText}>✗ {m}</Text>
-                                </View>
-                            ))}
-                        </View>
+                    {hasEstimated && (
+                        <Text style={s.estimatedNote}>
+                            Confirmed: ${confirmed.toFixed(0)} · Estimated: ~${estimated.toFixed(0)}
+                        </Text>
+                    )}
+                    {dailyBudget > 0 && (
+                        <Text style={s.dailyBudget}>
+                            ${dailyBudget.toFixed(2)}/day remaining
+                        </Text>
                     )}
                 </TouchableOpacity>
-            )}
 
-            {/* ── This Week Summary ──────────────────────────── */}
-            <View style={s.weekCard}>
-                <Text style={s.weekTitle}>📊 This Week</Text>
-                <View style={s.weekGrid}>
-                    <View style={s.weekStat}>
-                        <Text style={s.weekStatValue}>{expiring.length}</Text>
-                        <Text style={s.weekStatLabel}>Expiring</Text>
+                {/* ── AI Insights ─────────────────────────────────── */}
+                {homeInsights.length > 0 && (
+                    <View style={{ marginBottom: 12 }}>
+                        {homeInsights.map((insight: any, i: number) => (
+                            <View key={i} style={[s.insightCard, {
+                                backgroundColor: insight.type === "warning" ? "#fef2f2" : insight.type === "tip" ? "#eff6ff" : "#f9fafb",
+                                borderColor: insight.type === "warning" ? "#fecaca" : insight.type === "tip" ? "#bfdbfe" : "#e5e7eb",
+                            }]}>
+                                <Text style={s.insightTitle}>
+                                    {insight.type === "warning" ? "⚠️" : insight.type === "tip" ? "💡" : "ℹ️"} {insight.title}
+                                </Text>
+                                <Text style={s.insightBody}>{insight.body}</Text>
+                            </View>
+                        ))}
                     </View>
-                    <View style={s.weekStat}>
-                        <Text style={s.weekStatValue}>{shopping.length}</Text>
-                        <Text style={s.weekStatLabel}>To Buy</Text>
-                    </View>
-                    <View style={s.weekStat}>
-                        <Text style={s.weekStatValue}>${parseFloat(budget?.waste_cost ?? "0").toFixed(0)}</Text>
-                        <Text style={s.weekStatLabel}>Wasted</Text>
-                    </View>
-                    <View style={s.weekStat}>
-                        <Text style={s.weekStatValue}>{recipes.length}</Text>
-                        <Text style={s.weekStatLabel}>Recipes</Text>
+                )}
+
+                {/* ── Tonight's Pick Card ────────────────────────── */}
+                {topRecipe && (
+                    <TouchableOpacity style={s.recipeCard} onPress={() => router.push("/(tabs)/recipes")}>
+                        <Text style={s.recipeLabel}>🍽 Tonight's Pick</Text>
+                        <Text style={s.recipeName}>{topRecipe.name}</Text>
+                        <View style={s.recipeMetaRow}>
+                            {topRecipe.time_minutes && (
+                                <Text style={s.recipeMeta}>⏱ {topRecipe.time_minutes} min</Text>
+                            )}
+                            <Text style={[s.recipeMeta, { color: "#87A96B" }]}>
+                                ✅ {topRecipe.matched_count}/{topRecipe.ingredients?.length ?? 0} in pantry
+                            </Text>
+                            <Text style={[s.recipeMeta, { color: "#006994", fontWeight: "700" }]}>
+                                {topRecipe.match_score}% match
+                            </Text>
+                        </View>
+                        {topRecipe.missing?.length > 0 && (
+                            <View style={s.missingRow}>
+                                {topRecipe.missing.slice(0, 3).map((m: string) => (
+                                    <View key={m} style={s.missingBadge}>
+                                        <Text style={s.missingText}>✗ {m}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                )}
+
+                {/* ── This Week Summary ──────────────────────────── */}
+                <View style={s.weekCard}>
+                    <Text style={s.weekTitle}>📊 This Week</Text>
+                    <View style={s.weekGrid}>
+                        <View style={s.weekStat}>
+                            <Text style={s.weekStatValue}>{expiring.length}</Text>
+                            <Text style={s.weekStatLabel}>Expiring</Text>
+                        </View>
+                        <View style={s.weekStat}>
+                            <Text style={s.weekStatValue}>{shopping.length}</Text>
+                            <Text style={s.weekStatLabel}>To Buy</Text>
+                        </View>
+                        <View style={s.weekStat}>
+                            <Text style={s.weekStatValue}>${parseFloat(budget?.waste_cost ?? "0").toFixed(0)}</Text>
+                            <Text style={s.weekStatLabel}>Wasted</Text>
+                        </View>
+                        <View style={s.weekStat}>
+                            <Text style={s.weekStatValue}>{recipes.length}</Text>
+                            <Text style={s.weekStatLabel}>Recipes</Text>
+                        </View>
                     </View>
                 </View>
-            </View>
 
-            {/* ── Eat Me First ────────────────────────────────── */}
-            {expiring.length > 0 && (
-                <>
-                    <Text style={s.sectionTitle}>🍎 Eat Me First</Text>
-                    {expiring.slice(0, 5).map((item: any) => {
-                        const daysLeft = item.expiration_date
-                            ? Math.ceil((new Date(item.expiration_date).getTime() - Date.now()) / 86400000)
-                            : null;
-                        return (
-                            <View key={item.id} style={[s.expiryCard, {
-                                borderColor: daysLeft !== null && daysLeft <= 1 ? "#EC5800" : "#f59e0b",
-                            }]}>
-                                <Text style={s.itemName}>{item.name}</Text>
-                                <Text style={s.itemSub}>
-                                    {item.location} · {item.expiration_date ? format(new Date(item.expiration_date), "MMM d") : ""}
-                                </Text>
-                                {daysLeft !== null && (
-                                    <Text style={[s.daysLeft, { color: daysLeft <= 1 ? "#EC5800" : "#b45309" }]}>
-                                        {daysLeft <= 0 ? "Expired!" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}
+                {/* ── Eat Me First ────────────────────────────────── */}
+                {expiring.length > 0 && (
+                    <>
+                        <Text style={s.sectionTitle}>🍎 Eat Me First</Text>
+                        {expiring.slice(0, 5).map((item: any) => {
+                            const daysLeft = item.expiration_date
+                                ? Math.ceil((new Date(item.expiration_date).getTime() - Date.now()) / 86400000)
+                                : null;
+                            return (
+                                <View key={item.id} style={[s.expiryCard, {
+                                    borderColor: daysLeft !== null && daysLeft <= 1 ? "#EC5800" : "#f59e0b",
+                                }]}>
+                                    <Text style={s.itemName}>{item.name}</Text>
+                                    <Text style={s.itemSub}>
+                                        {item.location} · {item.expiration_date ? format(new Date(item.expiration_date), "MMM d") : ""}
                                     </Text>
-                                )}
-                            </View>
-                        );
-                    })}
-                </>
-            )}
+                                    {daysLeft !== null && (
+                                        <Text style={[s.daysLeft, { color: daysLeft <= 1 ? "#EC5800" : "#b45309" }]}>
+                                            {daysLeft <= 0 ? "Expired!" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}
+                                        </Text>
+                                    )}
+                                </View>
+                            );
+                        })}
+                    </>
+                )}
+            </>}
         </ScrollView>
     );
 }
