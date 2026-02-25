@@ -8,6 +8,7 @@ import { pantryApi, insightsApi } from "../../src/lib/api";
 import { format } from "date-fns";
 import * as Haptics from "expo-haptics";
 import Toast from "react-native-toast-message";
+import { PantrySkeleton } from "../../src/components/Skeleton";
 
 type Location = "ALL" | "FRIDGE" | "FREEZER" | "PANTRY";
 type Segment = "stock" | "shopping";
@@ -287,16 +288,14 @@ export default function PantryScreen() {
                     ))}
 
                     {/* Item List */}
-                    <FlatList
+                    {isLoading && items.length === 0 ? <PantrySkeleton /> : <FlatList
                         data={sortedItems}
                         keyExtractor={(i) => i.id}
                         contentContainerStyle={s.list}
                         ListEmptyComponent={
                             <View style={s.emptyBox}>
                                 <Text style={s.emptyIcon}>📦</Text>
-                                <Text style={s.emptyTitle}>
-                                    {isLoading ? "Loading…" : "Your pantry is empty"}
-                                </Text>
+                                <Text style={s.emptyTitle}>Your pantry is empty</Text>
                                 <Text style={s.emptySub}>Scan a receipt or tap + to add items</Text>
                             </View>
                         }
@@ -340,20 +339,18 @@ export default function PantryScreen() {
                                 </TouchableOpacity>
                             );
                         }}
-                    />
+                    />}
                 </>
             ) : (
                 // ── Shopping List ─────────────────────────────────
-                <FlatList
+                shopLoading && shoppingItems.length === 0 ? <PantrySkeleton /> : <FlatList
                     data={shoppingItems}
                     keyExtractor={(i) => i.id}
                     contentContainerStyle={s.list}
                     ListEmptyComponent={
                         <View style={s.emptyBox}>
                             <Text style={s.emptyIcon}>🛒</Text>
-                            <Text style={s.emptyTitle}>
-                                {shopLoading ? "Loading…" : "Shopping list is empty"}
-                            </Text>
+                            <Text style={s.emptyTitle}>Shopping list is empty</Text>
                             <Text style={s.emptySub}>Items auto-add when you mark them as used or trashed</Text>
                         </View>
                     }
