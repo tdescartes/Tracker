@@ -1,6 +1,7 @@
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { pantryApi } from "../../src/lib/api";
+import { ShoppingSkeleton } from "../../src/components/Skeleton";
 
 export default function ShoppingListScreen() {
     const qc = useQueryClient();
@@ -17,33 +18,34 @@ export default function ShoppingListScreen() {
 
     return (
         <View style={s.screen}>
-            <FlatList
-                data={items}
-                keyExtractor={(i) => i.id}
-                contentContainerStyle={s.list}
-                ListEmptyComponent={
-                    <View style={s.empty}>
-                        <Text style={s.emptyIcon}>🛒</Text>
-                        <Text style={s.emptyText}>
-                            {isLoading ? "Loading…" : "Shopping list is empty.\nItems auto-add when you mark them as used or trashed."}
-                        </Text>
-                    </View>
-                }
-                renderItem={({ item }) => (
-                    <View style={s.card}>
-                        <View style={s.info}>
-                            <Text style={s.name}>{item.name}</Text>
-                            {item.category && <Text style={s.category}>{item.category}</Text>}
+            {isLoading && items.length === 0 ? <ShoppingSkeleton /> :
+                <FlatList
+                    data={items}
+                    keyExtractor={(i) => i.id}
+                    contentContainerStyle={s.list}
+                    ListEmptyComponent={
+                        <View style={s.empty}>
+                            <Text style={s.emptyIcon}>🛒</Text>
+                            <Text style={s.emptyText}>
+                                Shopping list is empty.{"\n"}Items auto-add when you mark them as used or trashed.
+                            </Text>
                         </View>
-                        <TouchableOpacity
-                            style={s.removeBtn}
-                            onPress={() => removeFromList.mutate(item.id)}
-                        >
-                            <Text style={s.removeText}>✓ Got it</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
-            />
+                    }
+                    renderItem={({ item }) => (
+                        <View style={s.card}>
+                            <View style={s.info}>
+                                <Text style={s.name}>{item.name}</Text>
+                                {item.category && <Text style={s.category}>{item.category}</Text>}
+                            </View>
+                            <TouchableOpacity
+                                style={s.removeBtn}
+                                onPress={() => removeFromList.mutate(item.id)}
+                            >
+                                <Text style={s.removeText}>✓ Got it</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                />}
         </View>
     );
 }
