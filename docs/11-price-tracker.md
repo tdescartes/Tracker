@@ -7,6 +7,7 @@
 **Subheadline**: Search any item you've bought before and see its price history across every receipt. A sparkline chart shows whether you're paying more or less than last month — with no extra data entry.
 
 **Bullets**:
+
 - **Automatic price history** — Every receipt scan builds a price database. No manual tracking needed
 - **Sparkline visualization** — See price trends at a glance with a compact line chart
 - **Percentage change** — Instant "up 12% since January" indicators so you know where inflation hits your wallet hardest
@@ -17,7 +18,7 @@
 
 ## Problem Statement
 
-Consumers feel inflation but can't measure it at the household level. National CPI numbers don't reflect *your* grocery store, *your* brands, *your* buying patterns. Without per-item price tracking, you can't tell if milk really went up or if you switched to a more expensive brand.
+Consumers feel inflation but can't measure it at the household level. National CPI numbers don't reflect _your_ grocery store, _your_ brands, _your_ buying patterns. Without per-item price tracking, you can't tell if milk really went up or if you switched to a more expensive brand.
 
 ## Solution
 
@@ -88,12 +89,14 @@ Displayed as: **"Milk: $4.09 — up 17.2% since October 2025"**
 ## Platform Behavior
 
 ### Web
+
 - **Search input**: Text field in budget page, debounced search
 - **Results**: Sparkline chart (Recharts `<LineChart>`) + price summary
 - **Badge**: Green (price down) or red (price up) percentage indicator
 - **Empty state**: "Search an item to see its price history"
 
 ### Mobile
+
 - **Search**: Text input with "Search" button
 - **Results**: Compact sparkline + price points
 - **Loading**: Skeleton placeholder while fetching
@@ -102,9 +105,9 @@ Displayed as: **"Milk: $4.09 — up 17.2% since October 2025"**
 
 ## API Endpoint
 
-| Method | Path | Params | Description |
-|--------|------|--------|-------------|
-| GET | `/api/budget/inflation/{item_name}` | Path param: item name | Price history time series |
+| Method | Path                                | Params                | Description               |
+| ------ | ----------------------------------- | --------------------- | ------------------------- |
+| GET    | `/api/budget/inflation/{item_name}` | Path param: item name | Price history time series |
 
 ---
 
@@ -125,9 +128,9 @@ The more receipts scanned over time, the richer the price history becomes. This 
 
 ## Connected Features
 
-| Trigger | Effect |
-|---------|--------|
-| Receipt scanned | New price data points added |
-| Multiple receipts over time | Trend line becomes meaningful |
-| Price increase detected | Budget insight could reference inflation |
-| Item searched | Historical comparison across all purchases |
+| Trigger                     | Effect                                     |
+| --------------------------- | ------------------------------------------ |
+| Receipt scanned             | New price data points added                |
+| Multiple receipts over time | Trend line becomes meaningful              |
+| Price increase detected     | Budget insight could reference inflation   |
+| Item searched               | Historical comparison across all purchases |
