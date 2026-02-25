@@ -7,9 +7,10 @@
 **Subheadline**: Contextual nudges appear right where you need them — on the dashboard, in pantry, on your goals page. Need more detail? Ask the AI chat anything about your spending, food waste, or savings progress.
 
 **Bullets**:
+
 - **Contextual nudges** — "Budget running hot: $480 of $600 spent (80%). At this pace you'll hit $720 by month-end." Appears in real-time on the screens where the data lives
 - **Category trend detection** — "Dining Out is up 35% vs last month ($120 → $162)." Spots changes you might not notice scrolling through transactions
-- **AI chat** — Ask "What should I cut to save $200?" and get an answer grounded in *your* actual spending data, not generic advice
+- **AI chat** — Ask "What should I cut to save $200?" and get an answer grounded in _your_ actual spending data, not generic advice
 
 **CTA**: See your insights →
 
@@ -40,6 +41,7 @@ Request → Run 6 SQL analysis blocks → Collect InsightOut objects
 ```
 
 Each insight includes:
+
 - `screen`: Where it should appear (home, budget, pantry, goals)
 - `type`: Visual treatment (warning, tip, info)
 - `priority`: Sort order (1–10, higher = more important)
@@ -47,18 +49,19 @@ Each insight includes:
 
 ### The 6 Insight Categories
 
-| # | Category | Screen | Priority | Trigger |
-|---|----------|--------|----------|---------|
-| 1 | **Budget Pace** | budget | 3–10 | Always runs. Warns at 80%+ and 100%+ usage |
-| 2 | **Category Trends** | budget | 6 | Category spending up ≥15% vs last month |
-| 3 | **Expiring Items** | pantry | 9 | Items expiring within 3 days |
-| 4 | **Food Waste** | home | 7 | Any trashed items this month |
-| 5 | **Surplus → Goals** | goals/home | 4–5 | Positive income minus expenses |
-| 6 | **Subscription Total** | home | 4 | Recurring charges exceed $20/month |
+| #   | Category               | Screen     | Priority | Trigger                                    |
+| --- | ---------------------- | ---------- | -------- | ------------------------------------------ |
+| 1   | **Budget Pace**        | budget     | 3–10     | Always runs. Warns at 80%+ and 100%+ usage |
+| 2   | **Category Trends**    | budget     | 6        | Category spending up ≥15% vs last month    |
+| 3   | **Expiring Items**     | pantry     | 9        | Items expiring within 3 days               |
+| 4   | **Food Waste**         | home       | 7        | Any trashed items this month               |
+| 5   | **Surplus → Goals**    | goals/home | 4–5      | Positive income minus expenses             |
+| 6   | **Subscription Total** | home       | 4        | Recurring charges exceed $20/month         |
 
 ### Insight Card Examples
 
 **Budget pace (over budget)**:
+
 ```
 type: warning | priority: 10
 "Over budget"
@@ -66,6 +69,7 @@ type: warning | priority: 10
 ```
 
 **Budget pace (running hot)**:
+
 ```
 type: warning | priority: 8
 "Budget running hot"
@@ -73,6 +77,7 @@ type: warning | priority: 8
 ```
 
 **Category trend**:
+
 ```
 type: tip | priority: 6
 "Dining Out spending up"
@@ -80,6 +85,7 @@ type: tip | priority: 6
 ```
 
 **Expiring items**:
+
 ```
 type: warning | priority: 9
 "3 items expiring soon"
@@ -87,6 +93,7 @@ type: warning | priority: 9
 ```
 
 **Food waste**:
+
 ```
 type: tip | priority: 7
 "Food waste this month"
@@ -94,6 +101,7 @@ type: tip | priority: 7
 ```
 
 **Surplus**:
+
 ```
 type: tip | priority: 5
 "$340 surplus this month"
@@ -101,6 +109,7 @@ type: tip | priority: 5
 ```
 
 **Subscriptions**:
+
 ```
 type: info | priority: 4
 "Subscriptions"
@@ -113,11 +122,12 @@ The dashboard filters insights by screen and displays the top 3:
 
 ```typescript
 const homeInsights = insights
-  .filter(i => i.screen === "home" || i.screen === "budget")
+  .filter((i) => i.screen === "home" || i.screen === "budget")
   .slice(0, 3);
 ```
 
 Each card is color-coded by type:
+
 - `warning` → Red background (`bg-red-50 border-red-200`)
 - `tip` → Blue background (`bg-blue-50 border-blue-200`)
 - `info` → Gray background (`bg-gray-50 border-gray-200`)
@@ -178,6 +188,7 @@ Savings goals: Toyota Camry: $5,000 / $28,000; Emergency Fund: $1,200 / $5,000
 ```
 
 This gives Gemini enough context to answer questions like:
+
 - "What should I cut to save $200?"
 - "Am I on track this month?"
 - "What's expiring soon?"
@@ -185,22 +196,24 @@ This gives Gemini enough context to answer questions like:
 
 ### Fallback Behavior
 
-| Scenario | Response |
-|----------|----------|
-| No Gemini API key | "AI chat requires a Gemini API key. Check your insights on the dashboard for spending analysis!" |
-| Gemini error | "Sorry, I had trouble processing that. Try asking about your spending, pantry items, or savings goals!" |
-| Empty message | HTTP 400 — "Message cannot be empty" |
+| Scenario          | Response                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------- |
+| No Gemini API key | "AI chat requires a Gemini API key. Check your insights on the dashboard for spending analysis!"        |
+| Gemini error      | "Sorry, I had trouble processing that. Try asking about your spending, pantry items, or savings goals!" |
+| Empty message     | HTTP 400 — "Message cannot be empty"                                                                    |
 
 ---
 
 ## Platform Behavior
 
 ### Web
+
 - **Insight cards**: 3-column grid on dashboard, color-coded by type
 - **Chat**: Dedicated panel in dashboard with text input and response area
 - **Loading**: `InsightsSkeleton` — 3 pulsing card placeholders
 
 ### Mobile
+
 - **Insight cards**: Horizontal scroll carousel on home tab
 - **Chat**: Bottom sheet with keyboard-aware input
 - **Type icons**: Lightbulb for tips, warning triangle for warnings
@@ -209,10 +222,10 @@ This gives Gemini enough context to answer questions like:
 
 ## API Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/insights/` | Contextual insights (sorted by priority) |
-| POST | `/api/chat/` | AI chat (send message, get reply) |
+| Method | Path             | Description                              |
+| ------ | ---------------- | ---------------------------------------- |
+| GET    | `/api/insights/` | Contextual insights (sorted by priority) |
+| POST   | `/api/chat/`     | AI chat (send message, get reply)        |
 
 ### Insight Response Shape
 
@@ -242,10 +255,10 @@ This gives Gemini enough context to answer questions like:
 
 ## Connected Features
 
-| Trigger | Effect |
-|---------|--------|
-| Receipt scanned | Budget pace insight recalculates |
-| Item trashed | Food waste insight updates |
-| Bank statement uploaded | Income/expense/subscription insights refresh |
-| Goal created | Surplus insight links to goals |
-| Pantry item nearing expiry | Expiry warning appears on pantry screen |
+| Trigger                    | Effect                                       |
+| -------------------------- | -------------------------------------------- |
+| Receipt scanned            | Budget pace insight recalculates             |
+| Item trashed               | Food waste insight updates                   |
+| Bank statement uploaded    | Income/expense/subscription insights refresh |
+| Goal created               | Surplus insight links to goals               |
+| Pantry item nearing expiry | Expiry warning appears on pantry screen      |
