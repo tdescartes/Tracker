@@ -7,6 +7,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { bankApi, plaidApi } from "../../src/lib/api";
+import { TransactionsSkeleton } from "../../src/components/Skeleton";
 
 const CATEGORY_COLORS: Record<string, string> = {
     Groceries: "#22c55e",
@@ -29,7 +30,7 @@ export default function BankScreen() {
     const [categoryFilter, setCategoryFilter] = useState<string>("all");
     const [refreshing, setRefreshing] = useState(false);
 
-    const { data: transactions = [], refetch } = useQuery({
+    const { data: transactions = [], refetch, isLoading: txLoading } = useQuery({
         queryKey: ["bank-transactions"],
         queryFn: () => bankApi.transactions().then((r) => r.data),
     });
@@ -154,6 +155,9 @@ export default function BankScreen() {
                         </TouchableOpacity>
                     </View>
                 )}
+
+                {/* Initial loading skeleton */}
+                {txLoading && transactions.length === 0 && !uploading && <TransactionsSkeleton />}
 
                 {transactions.length > 0 && (
                     <>
