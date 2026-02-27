@@ -23,14 +23,16 @@ api.interceptors.response.use(
 
 // ── Auth ─────────────────────────────────────────────────────
 export const authApi = {
-    register: (d: { email: string; password: string; full_name?: string; household_name?: string }) =>
-        api.post("/api/auth/register", d),
+    register: (d: {
+        name: string;
+        email: string;
+        admin_first_name: string;
+        admin_last_name: string;
+        admin_email: string;
+        admin_password: string;
+    }) => api.post("/api/auth/register", d),
     login: (email: string, password: string) =>
-        api.post(
-            "/api/auth/login",
-            new URLSearchParams({ username: email, password }).toString(),
-            { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
-        ),
+        api.post("/api/auth/login", { email, password }),
     me: () => api.get("/api/auth/me"),
 };
 
