@@ -2,11 +2,29 @@ import { create } from "zustand";
 import * as SecureStore from "expo-secure-store";
 import { authApi } from "../lib/api";
 
-interface User { id: string; email: string; full_name: string | null; household_id: string | null; }
+interface User {
+    id: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    company_id: string;
+    role: string;
+    is_active: boolean;
+    employee_id?: string | null;
+    last_login?: string | null;
+    created_at: string;
+}
 interface AuthState {
     user: User | null; token: string | null;
     login: (email: string, password: string) => Promise<void>;
-    register: (d: { email: string; password: string; full_name?: string; household_name?: string }) => Promise<void>;
+    register: (d: {
+        name: string;
+        email: string;
+        admin_first_name: string;
+        admin_last_name: string;
+        admin_email: string;
+        admin_password: string;
+    }) => Promise<void>;
     logout: () => Promise<void>;
     hydrate: () => Promise<boolean>;
 }
