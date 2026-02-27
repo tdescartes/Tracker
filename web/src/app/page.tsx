@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
+import MarketingLanding from "@/components/landing/MarketingLanding";
 
-// Root "/" → redirect to dashboard (auth check is inside dashboard layout)
 export default function Home() {
-    redirect("/dashboard");
+    return <MarketingLanding />;
 }
