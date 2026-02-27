@@ -4,8 +4,14 @@ import { authApi } from "@/lib/api";
 interface User {
     id: string;
     email: string;
-    full_name: string | null;
-    household_id: string | null;
+    first_name: string;
+    last_name: string;
+    company_id: string;
+    role: string;
+    is_active: boolean;
+    employee_id?: string | null;
+    last_login?: string | null;
+    created_at: string;
 }
 
 interface AuthState {
@@ -13,7 +19,14 @@ interface AuthState {
     token: string | null;
     isLoading: boolean;
     login: (email: string, password: string) => Promise<void>;
-    register: (data: { email: string; password: string; full_name?: string; household_name?: string }) => Promise<void>;
+    register: (data: {
+        name: string;
+        email: string;
+        admin_first_name: string;
+        admin_last_name: string;
+        admin_email: string;
+        admin_password: string;
+    }) => Promise<void>;
     logout: () => void;
     hydrate: () => Promise<void>;
 }
