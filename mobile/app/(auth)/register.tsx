@@ -6,13 +6,26 @@ import { useAuthStore } from "../../src/store/authStore";
 export default function RegisterScreen() {
     const router = useRouter();
     const { register } = useAuthStore();
-    const [form, setForm] = useState({ email: "", password: "", full_name: "", household_name: "" });
+    const [form, setForm] = useState({
+        first_name: "",
+        last_name: "",
+        email: "",
+        password: "",
+        company_name: "",
+    });
     const [loading, setLoading] = useState(false);
 
     const handleRegister = async () => {
         setLoading(true);
         try {
-            await register(form);
+            await register({
+                name: form.company_name || `${form.first_name}'s Home`,
+                email: form.email,
+                admin_first_name: form.first_name,
+                admin_last_name: form.last_name,
+                admin_email: form.email,
+                admin_password: form.password,
+            });
             router.replace("/(tabs)");
         } catch {
             Alert.alert("Error", "Could not create account. Email may already be in use.");
@@ -22,10 +35,11 @@ export default function RegisterScreen() {
     };
 
     const fields = [
-        { key: "full_name", placeholder: "Full Name", keyboard: "default" as const },
+        { key: "first_name", placeholder: "First Name", keyboard: "default" as const },
+        { key: "last_name", placeholder: "Last Name", keyboard: "default" as const },
         { key: "email", placeholder: "Email", keyboard: "email-address" as const },
-        { key: "password", placeholder: "Password", keyboard: "default" as const, secure: true },
-        { key: "household_name", placeholder: "Household Name (e.g. Smith Family)", keyboard: "default" as const },
+        { key: "password", placeholder: "Password (min 8 characters)", keyboard: "default" as const, secure: true },
+        { key: "company_name", placeholder: "Household Name (e.g. Smith Family)", keyboard: "default" as const },
     ];
 
     return (
