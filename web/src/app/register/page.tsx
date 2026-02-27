@@ -8,7 +8,13 @@ import { useAuthStore } from "@/store/authStore";
 export default function RegisterPage() {
     const router = useRouter();
     const { register, isLoading } = useAuthStore();
-    const [form, setForm] = useState({ email: "", password: "", full_name: "", household_name: "" });
+    const [form, setForm] = useState({
+        first_name: "",
+        last_name: "",
+        email: "",
+        password: "",
+        company_name: "",
+    });
     const [error, setError] = useState("");
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -19,10 +25,18 @@ export default function RegisterPage() {
         e.preventDefault();
         setError("");
         try {
-            await register(form);
+            await register({
+                name: form.company_name || `${form.first_name}'s Home`,
+                email: form.email,
+                admin_first_name: form.first_name,
+                admin_last_name: form.last_name,
+                admin_email: form.email,
+                admin_password: form.password,
+            });
             router.push("/dashboard");
-        } catch {
-            setError("Could not create account. Email may already be in use.");
+        } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+            setError(msg || "Could not create account. Email may already be in use.");
         }
     };
 
@@ -40,10 +54,11 @@ export default function RegisterPage() {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {[
-                        { name: "full_name", label: "Full Name", type: "text" },
+                        { name: "first_name", label: "First Name", type: "text" },
+                        { name: "last_name", label: "Last Name", type: "text" },
                         { name: "email", label: "Email", type: "email" },
-                        { name: "password", label: "Password", type: "password" },
-                        { name: "household_name", label: "Household Name (e.g. The Smith Family)", type: "text" },
+                        { name: "password", label: "Password (min 8 characters)", type: "password" },
+                        { name: "company_name", label: "Household Name (e.g. The Smith Family)", type: "text" },
                     ].map((field) => (
                         <div key={field.name}>
                             <label className="block text-sm font-medium text-gray-700 mb-1">{field.label}</label>
@@ -52,7 +67,8 @@ export default function RegisterPage() {
                                 type={field.type}
                                 value={form[field.name as keyof typeof form]}
                                 onChange={handleChange}
-                                required={field.name !== "household_name"}
+                                required={field.name !== "company_name"}
+                                minLength={field.name === "password" ? 8 : undefined}
                                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
                             />
                         </div>
